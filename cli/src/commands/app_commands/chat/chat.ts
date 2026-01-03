@@ -1,6 +1,19 @@
-////Users/sumin/WebstormProjects/solchat-web/lib/onchainDB 여기에 레거시 버전이 있다.
+/**
+ * chat command pseudocode
+ * ---------------------------------------------------------------------------
+ * Purpose: define the entrypoint that bundles chat actions inside the CLI.
+ *          This is where we expose the ChatService flow described in chat-service.ts.
+ */
 
-// 그리고 새로운 업데이트는
-///Users/sumin/RustroverProjects/IQLabsContract 이 곳에 있는데, updates.txt를 보면 변경사항을 볼수있음
-//cli/docs/iqlabs-sdk-api.md 우리는 여기서 무슨 함수들을 쓸수있는지보고 이것만을거의 써가면서
-////Users/sumin/WebstormProjects/solchat-web/lib/onchainDB  여기서 하던걸 해야함
+// import { ChatService } from '../../../apps/chat/chat-service'
+// import { logInfo } from '../../../utils/logger'
+
+// export async function runChatCommand() {
+//   1) Instantiate ChatService (sharing config/rootId/connection from setupCliDemo).
+//   2) Use prompts to ask the user which action to run (requestConnection, sendMessage, readHistory, ...).
+//   3) Switch on the chosen action and call the corresponding ChatService method.
+//      - requestConnection: ask for wallet address/handle, then call service.requestConnection.
+//      - sendMessage: ask for room id/handle/message, then call service.sendChat (internally uses utils/chunk.ts chunkString).
+//      - readHistory: ask for room id, then call service.fetchChatHistory.
+//   4) Display the results via logInfo or a simple table renderer.
+// }
