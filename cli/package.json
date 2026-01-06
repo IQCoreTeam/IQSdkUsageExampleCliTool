@@ -10,7 +10,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/web3.js": "^1.98.0",
-    "iqlabs-sdk": "file:../../IQLabsBackendSdk"
+    "iqlabs-sdk": "git+https://github.com/IQCoreTeam/IQLabsBackendSdk.git"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",

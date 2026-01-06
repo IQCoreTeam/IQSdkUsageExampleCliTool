@@ -614,28 +614,16 @@ const uploadSession = async (flags: Record<string, FlagValue>) => {
         );
     }
 
+    const uploadSpeed = toString(flags.speed) ?? DEFAULT_SPEED;
     logStep("Starting upload (create session, post chunks, db_code_in)");
     const txSignature = await writer.codein(
         {connection, signer},
         chunks,
-        true,
+        runtime === "anchor",
         toString(flags.filename) ?? undefined,
         toNumber(flags.method) ?? 0,
         toString(flags.filetype) ?? "",
-        {
-            programId,
-            runtime,
-            logTransactions: process.env.IQLABS_LOG_TX === "1",
-            uploadConcurrency:
-                chunks.length < DEFAULT_LINKED_LIST_THRESHOLD
-                    ? 1
-                    : uploadConcurrency,
-            uploadRps:
-                chunks.length < DEFAULT_LINKED_LIST_THRESHOLD
-                    ? undefined
-                    : uploadRps,
-            sessionReadOnly: sessionReadOnlyOverride,
-        },
+        uploadSpeed,
     );
 
     logStep("Upload completed");
@@ -793,23 +781,15 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         {length: DEFAULT_LINKED_LIST_THRESHOLD},
         (_, index) => `session-${index}-${randomUUID()}`,
     );
+    const uploadSpeed = toString(flags.speed) ?? DEFAULT_SPEED;
     const sessionSignature = await writer.codein(
         {connection, signer},
         sessionChunks,
-        true,
+        runtime === "anchor",
         "session.txt",
         0,
         "text/plain",
-        {
-            programId,
-            runtime,
-            logTransactions: process.env.IQLABS_LOG_TX === "1",
-            uploadConcurrency:
-                toNumber(flags["upload-concurrency"]) ??
-                Math.min(64, sessionChunks.length),
-            uploadRps: toNumber(flags["upload-rps"]) ?? undefined,
-            sessionReadOnly: runtime === "pinocchio" ? true : undefined,
-        },
+        uploadSpeed,
     );
 
     logStep("Initialize db_root");
@@ -919,15 +899,11 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
     const rowSignature = await writer.codein(
         {connection, signer},
         rowChunks,
-        true,
+        runtime === "anchor",
         "row.json",
         0,
         "application/json",
-        {
-            programId,
-            runtime,
-            logTransactions: process.env.IQLABS_LOG_TX === "1",
-        },
+        uploadSpeed,
     );
     const writeDataIx = writeDataInstruction(
         builder,
@@ -1048,15 +1024,11 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
     const dmRowSignature = await writer.codein(
         {connection, signer},
         dmRowChunks,
-        true,
+        runtime === "anchor",
         "dm.json",
         0,
         "application/json",
-        {
-            programId,
-            runtime,
-            logTransactions: process.env.IQLABS_LOG_TX === "1",
-        },
+        uploadSpeed,
     );
     const writeConnIx = writeConnectionDataInstruction(
         builder,
