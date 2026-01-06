@@ -123,11 +123,11 @@ const actionInscribe = async () => {
     }
 };
 
-// Action: Read inscription by signature
-const actionRead = async () => {
+// Action: Fetch specific inscription by signature
+const actionFetchInscription = async () => {
     initContext();
 
-    console.log("\n--- Read Inscription ---\n");
+    console.log("\n--- Fetch Inscription ---\n");
 
     const signature = (await prompt("Transaction signature: ")).trim();
     if (!signature) {
@@ -155,11 +155,11 @@ const actionRead = async () => {
     }
 };
 
-// Action: List session PDAs
-const actionListSessions = async () => {
+// Action: List session files (large files only)
+const actionListSessionFiles = async () => {
     const { signer } = initContext();
 
-    console.log("\n--- List Session PDAs ---\n");
+    console.log("\n--- List Session Files ---\n");
 
     const pubkeyInput = (await prompt(`User pubkey [${signer.publicKey.toBase58()}]: `)).trim();
     const userPubkey = pubkeyInput || signer.publicKey.toBase58();
@@ -178,11 +178,11 @@ const actionListSessions = async () => {
     }
 };
 
-// Action: Fetch DB transactions (by PDA)
-const actionFetchTransactions = async () => {
+// Action: List all files (linked list + session)
+const actionListAllFiles = async () => {
     initContext();
 
-    console.log("\n--- Fetch DB Transactions ---\n");
+    console.log("\n--- List All Files ---\n");
 
     const pdaInput = (await prompt("DB PDA address: ")).trim();
     if (!pdaInput) {
@@ -220,9 +220,9 @@ const showMenu = () => {
     console.log("       File Manager         ");
     console.log("============================\n");
     console.log("  1) Inscribe file/string");
-    console.log("  2) Read inscription by signature");
-    console.log("  3) List my session PDAs");
-    console.log("  4) Fetch DB transactions (by PDA)");
+    console.log("  2) Fetch inscription by signature");
+    console.log("  3) List session files");
+    console.log("  4) List all files");
     console.log("  5) Back");
     console.log("\n============================\n");
 };
@@ -243,15 +243,15 @@ export const runFileManager = async (): Promise<void> => {
                 await prompt("\nPress Enter to continue...");
                 break;
             case "2":
-                await actionRead();
+                await actionFetchInscription();
                 await prompt("\nPress Enter to continue...");
                 break;
             case "3":
-                await actionListSessions();
+                await actionListSessionFiles();
                 await prompt("\nPress Enter to continue...");
                 break;
             case "4":
-                await actionFetchTransactions();
+                await actionListAllFiles();
                 await prompt("\nPress Enter to continue...");
                 break;
             case "5":
