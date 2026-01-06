@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/app.ts",
+    "example": "tsx src/example.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/app.js"
   },
