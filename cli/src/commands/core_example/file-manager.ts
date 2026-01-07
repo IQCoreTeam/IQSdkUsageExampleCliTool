@@ -201,7 +201,7 @@ const actionListAllFiles = async () => {
             logInfo("No transactions found");
         } else {
             logTable(signatures.map((sig) => ({
-                signature: sig.signature.slice(0, 20) + "...",
+                signature: sig.signature,
                 slot: sig.slot,
                 err: sig.err ? "error" : "ok",
                 memo: sig.memo ?? "",

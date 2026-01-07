@@ -77,3 +77,7 @@ body {
 .wallet-adapter-button:hover {
   background: #00cc00 !important;
 }
+
+.wallet-adapter-button-start-icon {
+  display: none !important;
+}

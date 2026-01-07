@@ -305,7 +305,7 @@ function Terminal() {
           print('No transactions found');
         } else {
           list.forEach((tx: { signature: string; slot: number; err: unknown; memo?: string }) => {
-            const sig = tx.signature.slice(0, 20) + '...';
+            const sig = tx.signature;
             const memo = tx.memo ?? '';
             print(`${sig}  slot:${tx.slot}  ${tx.err ? 'error' : 'ok'}  ${memo}`);
           });
