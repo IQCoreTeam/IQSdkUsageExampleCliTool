@@ -20,7 +20,7 @@ import * as contractModule from "iqlabs-sdk/src/contract";
 import * as writerUtilsModule from "iqlabs-sdk/src/sdk/writer/writer_utils";
 import * as seedUtilsModule from "iqlabs-sdk/src/sdk/utils/seed";
 
-const DEFAULT_RPC = "https://devnet.helius-rpc.com/?api-key=54b2d536-e4d8-4ccf-814e-0c38e242cd74";
+const DEFAULT_RPC = process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
 const DEFAULT_CHUNK_SIZE = 700;
 const DEFAULT_SPEED: ReadSessionSpeed = "light";
 const DEFAULT_READ_DELAY_MS = 2000;
@@ -422,7 +422,7 @@ const fundReceiverIfNeeded = async (
 
 const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
     const rpc = toString(flags.rpc) ?? DEFAULT_RPC;
-    process.env.IQLABS_RPC_ENDPOINT = rpc;
+    process.env.SOLANA_RPC_ENDPOINT = rpc;
 
     const keypairPath = toString(flags.keypair) ?? defaultKeypairPath();
     const {runtime, programId, profile} = resolveRuntimeConfig(
@@ -581,7 +581,7 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
 
 const uploadSession = async (flags: Record<string, FlagValue>) => {
     const rpc = toString(flags.rpc) ?? DEFAULT_RPC;
-    process.env.IQLABS_RPC_ENDPOINT = rpc;
+    process.env.SOLANA_RPC_ENDPOINT = rpc;
 
     const keypairPath = toString(flags.keypair) ?? defaultKeypairPath();
     const runtime = normalizeRuntime(toString(flags.runtime));
@@ -644,7 +644,7 @@ const uploadSession = async (flags: Record<string, FlagValue>) => {
 
 const readSession = async (flags: Record<string, FlagValue>) => {
     const rpc = toString(flags.rpc) ?? DEFAULT_RPC;
-    process.env.IQLABS_RPC_ENDPOINT = rpc;
+    process.env.SOLANA_RPC_ENDPOINT = rpc;
 
     const signature =
         toString(flags.signature) ??
@@ -701,7 +701,7 @@ const readSession = async (flags: Record<string, FlagValue>) => {
 
 const instructionSuite = async (flags: Record<string, FlagValue>) => {
     const rpc = toString(flags.rpc) ?? DEFAULT_RPC;
-    process.env.IQLABS_RPC_ENDPOINT = rpc;
+    process.env.SOLANA_RPC_ENDPOINT = rpc;
 
     const keypairPath = toString(flags.keypair) ?? defaultKeypairPath();
     const receiverKeypairPath = toString(flags["receiver-keypair"]);

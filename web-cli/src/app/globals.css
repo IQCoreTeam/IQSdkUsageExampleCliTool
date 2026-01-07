@@ -1,0 +1,79 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0a0a0a;
+  color: #00ff00;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.4;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.terminal {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  cursor: text;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0 10px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.output {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 10px;
+}
+
+.output div {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.input-line {
+  display: flex;
+  align-items: center;
+}
+
+.prompt {
+  color: #00ff00;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.input-line input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #00ff00;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  caret-color: #00ff00;
+}
+
+.wallet-adapter-button {
+  background: #00ff00 !important;
+  color: #0a0a0a !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  padding: 4px 12px !important;
+  height: auto !important;
+}
+
+.wallet-adapter-button:hover {
+  background: #00cc00 !important;
+}

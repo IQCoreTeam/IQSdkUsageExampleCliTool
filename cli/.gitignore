@@ -1,3 +1,6 @@
 node_modules
 keypair.json
 iqlabs_art.txt
+.env
+dist/
+.claude/
