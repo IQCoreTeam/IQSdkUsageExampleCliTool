@@ -14,7 +14,6 @@ import {
 } from "@solana/web3.js";
 
 import * as sdkModule from "iqlabs-sdk/src/sdk";
-import type {ReadSessionOptions, ReadSessionSpeed} from "iqlabs-sdk/src/sdk/reader";
 import * as constantsModule from "iqlabs-sdk/src/contract/constants";
 import * as contractModule from "iqlabs-sdk/src/contract";
 import * as writerUtilsModule from "iqlabs-sdk/src/sdk/writer/writer_utils";
@@ -22,11 +21,13 @@ import * as seedUtilsModule from "iqlabs-sdk/src/sdk/utils/seed";
 
 const DEFAULT_RPC = process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
 const DEFAULT_CHUNK_SIZE = 700;
-const DEFAULT_SPEED: ReadSessionSpeed = "light";
 const DEFAULT_READ_DELAY_MS = 2000;
+
+type ReadSpeed = "light" | "normal" | "fast";
+const DEFAULT_SPEED: ReadSpeed = "light";
 const DEFAULT_AIRDROP_LAMPORTS = Math.round(0.2 * LAMPORTS_PER_SOL);
 
-type Runtime = "anchor" | "pinocchio";
+type Runtime = "pinocchio" | "anchor";
 
 type ModuleLike = {
     default?: Record<string, unknown>;
@@ -119,7 +120,7 @@ Commands:
 Options:
   --rpc <url>              RPC endpoint (default: ${DEFAULT_RPC})
   --keypair <path>         Keypair path (default: ~/.config/solana/id.json)
-  --runtime <anchor|pinocchio>  Target program (default: anchor)
+  --runtime <pinocchio|anchor>  Target program (default: pinocchio)
   --text <string>          Text payload to upload
   --file <path>            File payload to upload
   --base64                 Treat payload as base64 (file -> encode, read -> decode)
@@ -169,7 +170,7 @@ const toBool = (value: FlagValue | undefined) => Boolean(value);
 
 const normalizeRuntime = (runtime: string | null): Runtime => {
     if (!runtime) {
-        return "anchor";
+        return "pinocchio";
     }
     const normalized = runtime.toLowerCase();
     if (normalized !== "anchor" && normalized !== "pinocchio") {
@@ -324,23 +325,15 @@ const resolveRuntimeConfig = (runtime: string | null) => {
     return {runtime: normalized, programId, profile};
 };
 
-const resolveReadOptions = (flags: Record<string, FlagValue>): ReadSessionOptions => {
+const resolveReadSpeed = (flags: Record<string, FlagValue>): ReadSpeed => {
     const speedValue = toString(flags.speed);
     const normalized = speedValue ? speedValue.toLowerCase() : null;
-    const speed =
-        normalized === "medium" ||
+    return normalized === "medium" ||
         normalized === "heavy" ||
         normalized === "extreme" ||
         normalized === "light"
-            ? (normalized as ReadSessionSpeed)
-            : DEFAULT_SPEED;
-    const maxRps = toNumber(flags["max-rps"]);
-    const maxConcurrency = toNumber(flags["max-concurrency"]);
-    return {
-        speed,
-        maxRps: maxRps ?? undefined,
-        maxConcurrency: maxConcurrency ?? undefined,
-    };
+        ? (normalized as ReadSpeed)
+        : DEFAULT_SPEED;
 };
 
 const resolveChunks = (
@@ -416,7 +409,7 @@ const fundReceiverIfNeeded = async (
         toPubkey: receiver,
         lamports: minLamports - balance,
     });
-    await sendTx(connection, signer, transferIx, {label: "fund_receiver"});
+    await sendTx(connection, signer, transferIx);
     return connection.getBalance(receiver);
 };
 
@@ -485,7 +478,7 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
             {seq: new BN(seq.toString())},
         );
         logStep("Create dummy session (anchor)");
-        await sendTx(connection, signer, createIx, {label: "create_session"});
+        await sendTx(connection, signer, createIx);
         sessionAccount = session;
     }
 
@@ -506,9 +499,7 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
                 decode_break: 0,
             },
         );
-        beforeTx = await sendTx(connection, signer, ix, {
-            label: `send_code:${index}`,
-        });
+        beforeTx = await sendTx(connection, signer, ix);
     }
 
     const metadata = JSON.stringify({
@@ -543,9 +534,7 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
         isSigner: false,
         isWritable: true,
     });
-    const signature = await sendTx(connection, signer, [feeIx, dbIx], {
-        label: "db_code_in",
-    });
+    const signature = await sendTx(connection, signer, [feeIx, dbIx]);
 
     logStep("Fetching db_code_in metadata");
     const metadataResult = await retry(
@@ -556,9 +545,9 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
     console.log(`metadata: ${metadataResult.metadata}`);
 
     logStep("Reading inscription");
-    const readOptions = resolveReadOptions(flags);
+    const readSpeed = resolveReadSpeed(flags);
     const {result} = await retry(
-        () => reader.readInscription(signature, readOptions),
+        () => reader.readInscription(signature, readSpeed),
         {attempts: 10, delayMs: 2000},
     );
     if (result === null) {
@@ -656,7 +645,7 @@ const readSession = async (flags: Record<string, FlagValue>) => {
     console.log(`Using RPC: ${rpc}`);
     console.log(`Signature: ${signature}`);
 
-    const readOptions = resolveReadOptions(flags);
+    const readSpeed = resolveReadSpeed(flags);
 
     logStep("Fetching db_code_in metadata");
     const metadata = await retry(
@@ -669,7 +658,7 @@ const readSession = async (flags: Record<string, FlagValue>) => {
 
     logStep("Reading inscription");
     const {result} = await retry(
-        () => reader.readInscription(signature, readOptions),
+        () => reader.readInscription(signature, readSpeed),
         {attempts: 10, delayMs: 2000},
     );
 
@@ -772,9 +761,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             decode_break: 0,
         },
     );
-    const sendCodeSignature = await sendTx(connection, signer, sendCodeIx, {
-        label: "send_code",
-    });
+    const sendCodeSignature = await sendTx(connection, signer, sendCodeIx);
 
     logStep("CodeIn session");
     const sessionChunks = Array.from(
@@ -807,7 +794,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         },
         {db_root_id: dbRootIdArg},
     );
-    await sendTx(connection, signer, initDbRootIx, {label: "initialize_db_root"});
+    await sendTx(connection, signer, initDbRootIx);
 
     logStep("Create table");
     const tableSeed = toSeed28(deriveSeedBytes(`table-${randomUUID()}`));
@@ -844,7 +831,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             writers_opt: null,
         },
     );
-    await sendTx(connection, signer, createTableIx, {label: "create_table"});
+    await sendTx(connection, signer, createTableIx);
 
     logStep("Update db_root table list");
     const updateListIx = updateDbRootTableListInstruction(
@@ -858,9 +845,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             new_table_seeds: [tableSeedArg],
         },
     );
-    await sendTx(connection, signer, updateListIx, {
-        label: "update_db_root_table_list",
-    });
+    await sendTx(connection, signer, updateListIx);
 
     logStep("Update table");
     const updateTableIx = updateTableInstruction(
@@ -885,7 +870,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             writers_opt: null,
         },
     );
-    await sendTx(connection, signer, updateTableIx, {label: "update_table"});
+    await sendTx(connection, signer, updateTableIx);
 
     logStep("Write data");
     const rowJson = JSON.stringify({
@@ -920,7 +905,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             row_json_tx: Buffer.from(rowSignature, "utf8"),
         },
     );
-    await sendTx(connection, signer, writeDataIx, {label: "write_data"});
+    await sendTx(connection, signer, writeDataIx);
 
     logStep("Update user metadata");
     const updateUserIx = updateUserMetadataInstruction(
@@ -936,7 +921,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             meta: Buffer.from(sessionSignature, "utf8"),
         },
     );
-    await sendTx(connection, signer, updateUserIx, {label: "update_user_metadata"});
+    await sendTx(connection, signer, updateUserIx);
 
     logStep("Request connection");
     const connectionSeed = toSeed28(
@@ -996,7 +981,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             ),
         },
     );
-    await sendTx(connection, signer, requestIx, {label: "request_connection"});
+    await sendTx(connection, signer, requestIx);
 
     logStep("Approve connection");
     const manageIx = manageConnectionInstruction(
@@ -1012,7 +997,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             new_status: CONNECTION_STATUS_APPROVED,
         },
     );
-    await sendTx(connection, receiver, manageIx, {label: "manage_connection"});
+    await sendTx(connection, receiver, manageIx);
 
     logStep("Write connection data");
     const dmRowJson = JSON.stringify({
@@ -1044,9 +1029,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             row_json_tx: Buffer.from(dmRowSignature, "utf8"),
         },
     );
-    await sendTx(connection, signer, writeConnIx, {
-        label: "write_connection_data",
-    });
+    await sendTx(connection, signer, writeConnIx);
 
     logStep("Instruction suite completed");
     console.log(`send_code signature: ${sendCodeSignature}`);
