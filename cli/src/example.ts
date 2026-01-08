@@ -57,11 +57,13 @@ const {
     getCodeAccountPda,
     getConnectionInstructionTablePda,
     getConnectionTablePda,
+    getConnectionTableRefPda,
     getDbAccountPda,
     getDbRootPda,
     getInstructionTablePda,
     getSessionPda,
     getTablePda,
+    getTargetConnectionTableRefPda,
     getUserPda,
     initializeDbRootInstruction,
     manageConnectionInstruction,
@@ -916,6 +918,16 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         dbRoot,
         connectionSeed,
     );
+    const connectionTableRef = getConnectionTableRefPda(
+        profile,
+        dbRoot,
+        connectionSeed,
+    );
+    const connectionTargetRef = getTargetConnectionTableRefPda(
+        profile,
+        dbRoot,
+        connectionSeed,
+    );
     const requestIx = requestConnectionInstruction(
         builder,
         {
@@ -925,6 +937,8 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             instruction_table: connectionInstructionTable,
             requester_user: signerUserState,
             receiver_user: receiverUserState,
+            table_ref: connectionTableRef,
+            target_table_ref: connectionTargetRef,
             system_program: SystemProgram.programId,
         },
         {
@@ -982,6 +996,7 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         {
             db_root: dbRoot,
             connection_table: connectionTable,
+            table_ref: connectionTableRef,
             signer: signer.publicKey,
         },
         {
