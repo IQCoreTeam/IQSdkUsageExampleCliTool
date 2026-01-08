@@ -140,7 +140,7 @@ const actionFetchInscription = async () => {
         logInfo(`Metadata: ${metadata.metadata}`);
 
         logInfo("Reading content...");
-        const { data } = await reader.readInscription(signature);
+        const { data } = await reader.readCodeIn(signature);
         if (data === null) {
             logInfo("Content unavailable (replay requested)");
         } else {

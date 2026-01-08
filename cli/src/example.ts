@@ -57,13 +57,11 @@ const {
     getCodeAccountPda,
     getConnectionInstructionTablePda,
     getConnectionTablePda,
-    getConnectionTableRefPda,
     getDbAccountPda,
     getDbRootPda,
     getInstructionTablePda,
     getSessionPda,
     getTablePda,
-    getTargetConnectionTableRefPda,
     getUserPda,
     initializeDbRootInstruction,
     manageConnectionInstruction,
@@ -532,7 +530,7 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
     logStep("Reading inscription");
     const readSpeed = resolveReadSpeed(flags);
     const {data} = await retry(
-        () => reader.readInscription(signature, readSpeed),
+        () => reader.readCodeIn(signature, readSpeed),
         {attempts: 10, delayMs: 2000},
     );
     if (data === null) {
@@ -597,7 +595,6 @@ const uploadSession = async (flags: Record<string, FlagValue>) => {
         toString(flags.filename) ?? undefined,
         toNumber(flags.method) ?? 0,
         toString(flags.filetype) ?? "",
-        uploadSpeed,
     );
 
     logStep("Upload completed");
@@ -643,7 +640,7 @@ const readSession = async (flags: Record<string, FlagValue>) => {
 
     logStep("Reading inscription");
     const {data} = await retry(
-        () => reader.readInscription(signature, readSpeed),
+        () => reader.readCodeIn(signature, readSpeed),
         {attempts: 10, delayMs: 2000},
     );
 
@@ -761,7 +758,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         "session.txt",
         0,
         "text/plain",
-        uploadSpeed,
     );
 
     logStep("Initialize db_root");
@@ -869,7 +865,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         "row.json",
         0,
         "application/json",
-        uploadSpeed,
     );
     const writeDataIx = writeDataInstruction(
         builder,
@@ -921,16 +916,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         dbRoot,
         connectionSeed,
     );
-    const connectionTableRef = getConnectionTableRefPda(
-        profile,
-        dbRoot,
-        connectionSeed,
-    );
-    const connectionTargetRef = getTargetConnectionTableRefPda(
-        profile,
-        dbRoot,
-        connectionSeed,
-    );
     const requestIx = requestConnectionInstruction(
         builder,
         {
@@ -940,8 +925,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             instruction_table: connectionInstructionTable,
             requester_user: signerUserState,
             receiver_user: receiverUserState,
-            table_ref: connectionTableRef,
-            target_table_ref: connectionTargetRef,
             system_program: SystemProgram.programId,
         },
         {
@@ -993,14 +976,12 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         "dm.json",
         0,
         "application/json",
-        uploadSpeed,
     );
     const writeConnIx = writeConnectionDataInstruction(
         builder,
         {
             db_root: dbRoot,
             connection_table: connectionTable,
-            table_ref: connectionTableRef,
             signer: signer.publicKey,
         },
         {
