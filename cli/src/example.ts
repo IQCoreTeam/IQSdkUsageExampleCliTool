@@ -63,9 +63,7 @@ const {
     getInstructionTablePda,
     getSessionPda,
     getTablePda,
-    getTableRefPda,
     getTargetConnectionTableRefPda,
-    getTargetTableRefPda,
     getUserPda,
     initializeDbRootInstruction,
     manageConnectionInstruction,
@@ -85,7 +83,6 @@ const writer = sdk.writer as typeof sdkModule.writer;
 const DEFAULT_LINKED_LIST_THRESHOLD = sdk
     .DEFAULT_LINKED_LIST_THRESHOLD as number;
 const DEFAULT_WRITE_FEE_RECEIVER = sdk.DEFAULT_WRITE_FEE_RECEIVER as string;
-const DEFAULT_WRITE_FEE_LAMPORTS = sdk.DEFAULT_WRITE_FEE_LAMPORTS as number;
 const DEFAULT_ANCHOR_PROGRAM_ID = constants
     .DEFAULT_ANCHOR_PROGRAM_ID as string;
 const DEFAULT_PINOCCHIO_PROGRAM_ID = constants
@@ -101,9 +98,6 @@ if (!DEFAULT_ANCHOR_PROGRAM_ID || !DEFAULT_PINOCCHIO_PROGRAM_ID) {
 }
 if (!DEFAULT_WRITE_FEE_RECEIVER) {
     throw new Error("Failed to load DEFAULT_WRITE_FEE_RECEIVER from iqlabs-sdk.");
-}
-if (!DEFAULT_WRITE_FEE_LAMPORTS) {
-    throw new Error("Failed to load DEFAULT_WRITE_FEE_LAMPORTS from iqlabs-sdk.");
 }
 
 const usage = `\
@@ -514,27 +508,18 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
     const feeReceiver = new PublicKey(DEFAULT_WRITE_FEE_RECEIVER);
 
     logStep("Finalize db_code_in");
-    const feeIx = SystemProgram.transfer({
-        fromPubkey: signer.publicKey,
-        toPubkey: dbAccount,
-        lamports: DEFAULT_WRITE_FEE_LAMPORTS,
-    });
     const dbIx = dbCodeInInstruction(
         builder,
         {
             user: signer.publicKey,
             db_account: dbAccount,
+            receiver: feeReceiver,
             system_program: SystemProgram.programId,
             session: sessionAccount,
         },
         {on_chain_path: beforeTx, metadata, session: null},
     );
-    dbIx.keys.push({
-        pubkey: feeReceiver,
-        isSigner: false,
-        isWritable: true,
-    });
-    const signature = await sendTx(connection, signer, [feeIx, dbIx]);
+    const signature = await sendTx(connection, signer, dbIx);
 
     logStep("Fetching db_code_in metadata");
     const metadataResult = await retry(
@@ -546,22 +531,22 @@ const linkedListCodeIn = async (flags: Record<string, FlagValue>) => {
 
     logStep("Reading inscription");
     const readSpeed = resolveReadSpeed(flags);
-    const {result} = await retry(
+    const {data} = await retry(
         () => reader.readInscription(signature, readSpeed),
         {attempts: 10, delayMs: 2000},
     );
-    if (result === null) {
+    if (data === null) {
         throw new Error("Read returned null; replay was requested.");
     }
 
     if (base64) {
         const original = Buffer.from(payload, "base64");
-        const decoded = Buffer.from(result, "base64");
+        const decoded = Buffer.from(data, "base64");
         if (!original.equals(decoded)) {
             throw new Error("Linked-list mismatch (base64 decoded content differs).");
         }
         console.log("Linked-list match (base64).");
-    } else if (result !== payload) {
+    } else if (data !== payload) {
         throw new Error("Linked-list mismatch (text differs).");
     } else {
         console.log("Linked-list match (text).");
@@ -657,35 +642,35 @@ const readSession = async (flags: Record<string, FlagValue>) => {
     console.log(`metadata: ${metadata.metadata}`);
 
     logStep("Reading inscription");
-    const {result} = await retry(
+    const {data} = await retry(
         () => reader.readInscription(signature, readSpeed),
         {attempts: 10, delayMs: 2000},
     );
 
-    if (result === null) {
+    if (data === null) {
         console.log("Result unavailable; replay was requested.");
-        return {result: null as string | null};
+        return {data: null as string | null};
     }
 
     logStep("Read complete");
-    console.log(`Result length: ${result.length}`);
+    console.log(`Result length: ${data.length}`);
 
     const outputPath = toString(flags.output);
     const useBase64 = toBool(flags.base64);
 
     if (outputPath) {
         if (useBase64) {
-            const buffer = Buffer.from(result, "base64");
+            const buffer = Buffer.from(data, "base64");
             writeFileSync(outputPath, buffer);
         } else {
-            writeFileSync(outputPath, result, "utf8");
+            writeFileSync(outputPath, data, "utf8");
         }
         console.log(`Wrote output: ${outputPath}`);
     } else {
-        console.log(result.slice(0, 500));
+        console.log(data.slice(0, 500));
     }
 
-    return {result};
+    return {data};
 };
 
 const instructionSuite = async (flags: Record<string, FlagValue>) => {
@@ -801,8 +786,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
     const tableSeedArg = toSeedArg(tableSeed);
     const table = getTablePda(profile, dbRoot, tableSeed);
     const instructionTable = getInstructionTablePda(profile, dbRoot, tableSeed);
-    const tableRef = getTableRefPda(profile, dbRoot, tableSeed);
-    const targetTableRef = getTargetTableRefPda(profile, dbRoot, tableSeed);
     const tableName = `cli_table_${Date.now()}`;
     const createTableIx = createTableInstruction(
         builder,
@@ -812,8 +795,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
             signer: signer.publicKey,
             table,
             instruction_table: instructionTable,
-            table_ref: tableRef,
-            target_table_ref: targetTableRef,
             system_program: SystemProgram.programId,
         },
         {
@@ -895,7 +876,6 @@ const instructionSuite = async (flags: Record<string, FlagValue>) => {
         {
             db_root: dbRoot,
             table,
-            table_ref: tableRef,
             signer_ata: signer.publicKey,
             signer: signer.publicKey,
         },
@@ -1047,8 +1027,8 @@ const roundtrip = async (flags: Record<string, FlagValue>) => {
 
     const readFlags = {...flags, signature: upload.txSignature};
     logStep("Roundtrip read");
-    const {result} = await readSession(readFlags);
-    if (result === null) {
+    const {data} = await readSession(readFlags);
+    if (data === null) {
         throw new Error("Read returned null; replay was requested.");
     }
 
@@ -1056,7 +1036,7 @@ const roundtrip = async (flags: Record<string, FlagValue>) => {
         const original = upload.rawBytes
             ? upload.rawBytes
             : Buffer.from(upload.payload, "base64");
-        const decoded = Buffer.from(result, "base64");
+        const decoded = Buffer.from(data, "base64");
         if (!original.equals(decoded)) {
             throw new Error("Roundtrip mismatch (base64 decoded content differs).");
         }
@@ -1064,7 +1044,7 @@ const roundtrip = async (flags: Record<string, FlagValue>) => {
         return;
     }
 
-    if (result !== upload.payload) {
+    if (data !== upload.payload) {
         throw new Error("Roundtrip mismatch (text differs).");
     }
     console.log("Roundtrip match (text).");

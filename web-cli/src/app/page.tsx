@@ -235,12 +235,12 @@ function Terminal() {
         print(`Path: ${meta.onChainPath}`);
         print(`Metadata: ${meta.metadata}`);
         print('Reading content...');
-        const { result } = await sdk.reader.readInscription(v);
-        if (result === null) {
+        const { data } = await sdk.reader.readInscription(v);
+        if (data === null) {
           print('Content unavailable (replay requested)');
         } else {
           print('', '--- Content ---');
-          print(result.length > 500 ? result.slice(0, 500) + '...[truncated]' : result);
+          print(data.length > 500 ? data.slice(0, 500) + '...[truncated]' : data);
           print('--- End ---', '');
         }
       } catch (e) {

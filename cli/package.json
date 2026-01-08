@@ -11,7 +11,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/web3.js": "^1.98.0",
-    "iqlabs-sdk": "file:../../iqsdk"
+    "iqlabs-sdk": "file:../../IQLabsBackendSdk"
   },
   "devDependencies": {
     "@types/bn.js": "^5.2.0",

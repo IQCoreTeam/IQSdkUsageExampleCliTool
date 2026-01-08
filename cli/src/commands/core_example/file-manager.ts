@@ -140,12 +140,12 @@ const actionFetchInscription = async () => {
         logInfo(`Metadata: ${metadata.metadata}`);
 
         logInfo("Reading content...");
-        const { result } = await reader.readInscription(signature);
-        if (result === null) {
+        const { data } = await reader.readInscription(signature);
+        if (data === null) {
             logInfo("Content unavailable (replay requested)");
         } else {
             console.log("\n--- Content ---");
-            console.log(result.length > 500 ? result.slice(0, 500) + "...[truncated]" : result);
+            console.log(data.length > 500 ? data.slice(0, 500) + "...[truncated]" : data);
             console.log("--- End ---\n");
         }
     } catch (err) {
