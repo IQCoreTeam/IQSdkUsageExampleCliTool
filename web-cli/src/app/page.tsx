@@ -235,7 +235,7 @@ function Terminal() {
         print(`Path: ${meta.onChainPath}`);
         print(`Metadata: ${meta.metadata}`);
         print('Reading content...');
-        const { data } = await sdk.reader.readInscription(v);
+        const { data } = await sdk.reader.readCodeIn(v);
         if (data === null) {
           print('Content unavailable (replay requested)');
         } else {
