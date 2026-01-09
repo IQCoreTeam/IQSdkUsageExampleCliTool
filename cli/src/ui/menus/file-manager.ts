@@ -1,22 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import os from "node:os";
-import { Connection, Keypair } from "@solana/web3.js";
+import {Connection, Keypair} from "@solana/web3.js";
 
-import * as sdkModule from "iqlabs-sdk/src/sdk";
+import * as sdkModule from "iqlabs-sdk";
 
-import { logError, logInfo, logTable } from "../../utils/logger";
-import { codeInFromInput } from "../../core_example/using_code_in";
-import { prompt } from "../../utils/prompt";
-
-// SDK setup
-type ModuleLike = { default?: Record<string, unknown>; [key: string]: unknown };
-const resolveExports = (m: ModuleLike) =>
-    m.default && typeof m.default === "object" ? { ...m.default, ...m } : m;
-
-const sdk = resolveExports(sdkModule as ModuleLike);
-
-const reader = sdk.reader as typeof sdkModule.reader;
+import {logError, logInfo, logTable} from "../../utils/logger";
+import {codeInFromInput} from "../../core_example/using_code_in";
+import {prompt} from "../../utils/prompt";
 
 // Config - use env var or default
 const DEFAULT_RPC = process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
@@ -62,7 +53,7 @@ const initContext = (): FileManagerContext => {
     logInfo(`RPC: ${DEFAULT_RPC}`);
     logInfo(`Signer: ${signer.publicKey.toBase58()}`);
 
-    ctx = { connection, signer, rpc: DEFAULT_RPC };
+    ctx = {connection, signer, rpc: DEFAULT_RPC};
     return ctx;
 };
 
@@ -72,7 +63,7 @@ const actionInscribeByTyping = async () => {
         logError("No text provided");
         return;
     }
-    const { connection, signer } = initContext();
+    const {connection, signer} = initContext();
     await codeInFromInput(connection, signer, input, "typed-text.txt", "text/plain");
 };
 
@@ -82,9 +73,9 @@ const actionInscribeFromFile = async () => {
         logError("File not found");
         return;
     }
-
+/// we need to make it actually read the file and put the file
     const input = fs.readFileSync(filePath, "utf8");
-    const { connection, signer } = initContext();
+    const {connection, signer} = initContext();
     await codeInFromInput(connection, signer, input, path.basename(filePath));
 };
 
@@ -101,13 +92,11 @@ const actionFetchInscription = async () => {
     }
 
     try {
-        logInfo("Reading metadata...");
-        const metadata = await reader.readDBMetadata(signature);
-        logInfo(`Path: ${metadata.onChainPath}`);
-        logInfo(`Metadata: ${metadata.metadata}`);
 
-        logInfo("Reading content...");
-        const { data } = await reader.readCodeIn(signature);
+        logInfo(" Reading content...");
+        const {data, metadata} = await sdkModule.reader.readCodeIn(signature);
+        logInfo(metadata);
+
         if (data === null) {
             logInfo("Content unavailable (replay requested)");
         } else {
@@ -124,7 +113,7 @@ const actionFetchInscription = async () => {
 
 // Action: List session files (large files only)
 const actionListSessionFiles = async () => {
-    const { signer } = initContext();
+    const {signer} = initContext();
 
     console.log("\n--- List Session Files ---\n");
 
@@ -133,12 +122,12 @@ const actionListSessionFiles = async () => {
 
     try {
         logInfo(`Fetching sessions for: ${userPubkey}`);
-        const sessions = await reader.getSessionPdaList(userPubkey);
+        const sessions = await sdkModule.reader.getSessionPdaList(userPubkey);
 
         if (sessions.length === 0) {
             logInfo("No sessions found");
         } else {
-            logTable(sessions.map((s: string) => ({ session: s })));
+            logTable(sessions.map((s: string) => ({session: s})));
         }
     } catch (err) {
         logError("List sessions failed", err);
@@ -147,7 +136,7 @@ const actionListSessionFiles = async () => {
 
 // Action: List all files (linked list + session)
 const actionListAllFiles = async () => {
-    initContext();
+    const {signer} = initContext();
 
     console.log("\n--- List All Files ---\n");
 
@@ -156,7 +145,6 @@ const actionListAllFiles = async () => {
         logError("No PDA provided");
         return;
     }
-
     const limitInput = (await prompt("Limit [10]: ")).trim();
     const limit = parseInt(limitInput) || 10;
 
@@ -164,7 +152,10 @@ const actionListAllFiles = async () => {
 
     try {
         logInfo(`Fetching transactions for: ${pdaInput}`);
-        const signatures = await reader.fetchAccountTransactions(pdaInput, { limit, before });
+        const DBPDA = await sdkModule.contract.getDbAccountPda(signer.publicKey); // make the profile value optional
+        const signatures = await sdkModule.reader.fetchAccountTransactions(DBPDA, {limit, before});
+        // in here . we can do
+       // await sdkModule.reader.readDBMetadata(each signatures) and update a signature array with metadata
 
         if (signatures.length === 0) {
             logInfo("No transactions found");
@@ -172,7 +163,7 @@ const actionListAllFiles = async () => {
             logTable(
                 signatures.map((sig) => ({
                     signature: sig.signature,
-                    slot: sig.slot,
+                   // slot: sig.slot,
                     err: sig.err ? "error" : "ok",
                     memo: sig.memo ?? "",
                 })),
