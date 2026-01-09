@@ -19,10 +19,8 @@ const sdk = resolveExports(sdkModule as ModuleLike);
 const reader = sdk.reader as typeof sdkModule.reader;
 const writer = sdk.writer as typeof sdkModule.writer;
 
-// Config - use env vars or defaults
-const DEFAULT_RPC = process.env.IQLABS_RPC_ENDPOINT
-    || process.env.SOLANA_RPC_ENDPOINT
-    || "https://devnet.helius-rpc.com/?api-key=54b2d536-e4d8-4ccf-814e-0c38e242cd74";
+// Config - use env var or default
+const DEFAULT_RPC = process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
 
 // Check for local keypair.json first, then env var, then default solana cli keypair
 const findKeypair = (): string => {
@@ -60,7 +58,7 @@ const initContext = (): FileManagerContext => {
     const connection = new Connection(DEFAULT_RPC, "confirmed");
     const signer = loadKeypair(DEFAULT_KEYPAIR);
 
-    process.env.IQLABS_RPC_ENDPOINT = DEFAULT_RPC;
+    process.env.SOLANA_RPC_ENDPOINT = DEFAULT_RPC;
 
     logInfo(`RPC: ${DEFAULT_RPC}`);
     logInfo(`Signer: ${signer.publicKey.toBase58()}`);
@@ -142,12 +140,12 @@ const actionFetchInscription = async () => {
         logInfo(`Metadata: ${metadata.metadata}`);
 
         logInfo("Reading content...");
-        const { result } = await reader.readInscription(signature);
-        if (result === null) {
+        const { data } = await reader.readCodeIn(signature);
+        if (data === null) {
             logInfo("Content unavailable (replay requested)");
         } else {
             console.log("\n--- Content ---");
-            console.log(result.length > 500 ? result.slice(0, 500) + "...[truncated]" : result);
+            console.log(data.length > 500 ? data.slice(0, 500) + "...[truncated]" : data);
             console.log("--- End ---\n");
         }
     } catch (err) {
@@ -203,7 +201,7 @@ const actionListAllFiles = async () => {
             logInfo("No transactions found");
         } else {
             logTable(signatures.map((sig) => ({
-                signature: sig.signature.slice(0, 20) + "...",
+                signature: sig.signature,
                 slot: sig.slot,
                 err: sig.err ? "error" : "ok",
                 memo: sig.memo ?? "",

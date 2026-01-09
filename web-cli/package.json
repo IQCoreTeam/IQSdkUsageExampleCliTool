@@ -1,0 +1,32 @@
+{
+  "name": "iqlabs-web-cli",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "15.5.9",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.98.0",
+    "@solana/wallet-adapter-base": "0.9.27",
+    "@solana/wallet-adapter-react": "0.15.38",
+    "@solana/wallet-adapter-react-ui": "0.9.38",
+    "@solana/wallet-adapter-wallets": "0.19.36",
+    "iqlabs-sdk": "file:../../IQLabsBackendSdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "18.3.12",
+    "typescript": "5.7.2"
+  },
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@solana/wallet-adapter-react": "0.15.38",
+    "@solana/wallet-adapter-base": "0.9.27"
+  }
+}
