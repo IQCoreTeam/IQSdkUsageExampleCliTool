@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { runFileManager } from "./commands/core_example/file-manager";
 import { prompt, closeReadline } from "./utils/prompt";
 
