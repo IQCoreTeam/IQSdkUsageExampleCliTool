@@ -16,7 +16,7 @@
     "@solana/wallet-adapter-react": "0.15.38",
     "@solana/wallet-adapter-react-ui": "0.9.38",
     "@solana/wallet-adapter-wallets": "0.19.36",
-    "iqlabs-sdk": "https://github.com/IQCoreTeam/IQLabsBackendSdk.git"
+    "iqlabs-sdk": "file:../../IQLabsBackendSdk"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

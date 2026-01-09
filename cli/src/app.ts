@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { runFileManager } from "./ui/menus/file-manager";
 import { prompt, closeReadline } from "./utils/prompt";
 
