@@ -5,8 +5,8 @@ import { Connection, Keypair } from "@solana/web3.js";
 
 import * as sdkModule from "iqlabs-sdk/src/sdk";
 
-import { logInfo, logError, logTable } from "../../utils/logger";
-import { chunkString, DEFAULT_CHUNK_SIZE } from "../../utils/chunk";
+import { logError, logInfo, logTable } from "../../utils/logger";
+import { codeInFromInput } from "../../core_example/using_code_in";
 import { prompt } from "../../utils/prompt";
 
 // SDK setup
@@ -17,7 +17,6 @@ const resolveExports = (m: ModuleLike) =>
 const sdk = resolveExports(sdkModule as ModuleLike);
 
 const reader = sdk.reader as typeof sdkModule.reader;
-const writer = sdk.writer as typeof sdkModule.writer;
 
 // Config - use env var or default
 const DEFAULT_RPC = process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
@@ -67,58 +66,26 @@ const initContext = (): FileManagerContext => {
     return ctx;
 };
 
-// Action: Inscribe file or string
-const actionInscribe = async () => {
+const actionInscribeByTyping = async () => {
+    const input = (await prompt("Text to inscribe: ")).trim();
+    if (!input) {
+        logError("No text provided");
+        return;
+    }
     const { connection, signer } = initContext();
+    await codeInFromInput(connection, signer, input, "typed-text.txt", "text/plain");
+};
 
-    console.log("\n--- Inscribe ---\n");
-    console.log("  1) File");
-    console.log("  2) Text");
-    console.log("");
-
-    const choice = (await prompt("Select input type: ")).trim();
-
-    let input: string;
-    if (choice === "1") {
-        const filePath = (await prompt("File path: ")).trim();
-        if (!filePath || !fs.existsSync(filePath)) {
-            logError("File not found");
-            return;
-        }
-        input = fs.readFileSync(filePath, "utf8");
-    } else if (choice === "2") {
-        input = (await prompt("Text to inscribe: ")).trim();
-        if (!input) {
-            logError("No text provided");
-            return;
-        }
-    } else {
-        logError("Invalid option");
+const actionInscribeFromFile = async () => {
+    const filePath = (await prompt("File path: ")).trim();
+    if (!filePath || !fs.existsSync(filePath)) {
+        logError("File not found");
         return;
     }
 
-    const filename = (await prompt("Filename (optional): ")).trim() || undefined;
-    const filetype = (await prompt("Filetype (optional): ")).trim() || undefined;
-
-    try {
-        logInfo("Chunking...");
-        const chunks = chunkString(input, DEFAULT_CHUNK_SIZE);
-        logInfo(`Chunks: ${chunks.length}`);
-
-        logInfo("Uploading...");
-        const signature = await writer.codein(
-            { connection, signer },
-            chunks,
-            false,
-            filename,
-            0,
-            filetype ?? "",
-        );
-
-        logInfo(`Signature: ${signature}`);
-    } catch (err) {
-        logError("Inscribe failed", err);
-    }
+    const input = fs.readFileSync(filePath, "utf8");
+    const { connection, signer } = initContext();
+    await codeInFromInput(connection, signer, input, path.basename(filePath));
 };
 
 // Action: Fetch specific inscription by signature
@@ -145,7 +112,9 @@ const actionFetchInscription = async () => {
             logInfo("Content unavailable (replay requested)");
         } else {
             console.log("\n--- Content ---");
-            console.log(data.length > 500 ? data.slice(0, 500) + "...[truncated]" : data);
+            console.log(
+                data.length > 500 ? data.slice(0, 500) + "...[truncated]" : data,
+            );
             console.log("--- End ---\n");
         }
     } catch (err) {
@@ -200,29 +169,105 @@ const actionListAllFiles = async () => {
         if (signatures.length === 0) {
             logInfo("No transactions found");
         } else {
-            logTable(signatures.map((sig) => ({
-                signature: sig.signature,
-                slot: sig.slot,
-                err: sig.err ? "error" : "ok",
-                memo: sig.memo ?? "",
-            })));
+            logTable(
+                signatures.map((sig) => ({
+                    signature: sig.signature,
+                    slot: sig.slot,
+                    err: sig.err ? "error" : "ok",
+                    memo: sig.memo ?? "",
+                })),
+            );
         }
     } catch (err) {
         logError("Fetch transactions failed", err);
     }
 };
 
-// Menu
-const showMenu = () => {
+const showMainMenu = () => {
     console.log("\n============================");
     console.log("       File Manager         ");
     console.log("============================\n");
-    console.log("  1) Inscribe file/string");
-    console.log("  2) Fetch inscription by signature");
-    console.log("  3) List session files");
-    console.log("  4) List all files");
-    console.log("  5) Back");
+    console.log("  1) Read");
+    console.log("  2) Write");
+    console.log("  3) Back");
     console.log("\n============================\n");
+};
+
+const showReadMenu = () => {
+    console.log("\n============================");
+    console.log("          Read Menu          ");
+    console.log("============================\n");
+    console.log("  1) Fetch inscription by signature");
+    console.log("  2) List session files");
+    console.log("  3) List all files");
+    console.log("  4) Back");
+    console.log("\n============================\n");
+};
+
+const showWriteMenu = () => {
+    console.log("\n============================");
+    console.log("          Write Menu         ");
+    console.log("============================\n");
+    console.log("  1) Typing");
+    console.log("  2) File path");
+    console.log("  3) Back");
+    console.log("\n============================\n");
+};
+
+const runReadMenu = async (): Promise<void> => {
+    let readRunning = true;
+    while (readRunning) {
+        clearScreen();
+        showReadMenu();
+
+        const choice = (await prompt("Select option [read]: ")).trim();
+        switch (choice) {
+            case "1":
+                await actionFetchInscription();
+                await prompt("\nPress Enter to continue...");
+                break;
+            case "2":
+                await actionListSessionFiles();
+                await prompt("\nPress Enter to continue...");
+                break;
+            case "3":
+                await actionListAllFiles();
+                await prompt("\nPress Enter to continue...");
+                break;
+            case "4":
+                readRunning = false;
+                break;
+            default:
+                logError("Invalid option");
+                await prompt("\nPress Enter to continue...");
+        }
+    }
+};
+
+const runWriteMenu = async (): Promise<void> => {
+    let writeRunning = true;
+    while (writeRunning) {
+        clearScreen();
+        showWriteMenu();
+
+        const choice = (await prompt("Select option [write]: ")).trim();
+        switch (choice) {
+            case "1":
+                await actionInscribeByTyping();
+                await prompt("\nPress Enter to continue...");
+                break;
+            case "2":
+                await actionInscribeFromFile();
+                await prompt("\nPress Enter to continue...");
+                break;
+            case "3":
+                writeRunning = false;
+                break;
+            default:
+                logError("Invalid option");
+                await prompt("\nPress Enter to continue...");
+        }
+    }
 };
 
 // Main loop
@@ -231,28 +276,17 @@ export const runFileManager = async (): Promise<void> => {
 
     while (running) {
         clearScreen();
-        showMenu();
+        showMainMenu();
 
         const choice = (await prompt("Select option: ")).trim();
-
         switch (choice) {
             case "1":
-                await actionInscribe();
-                await prompt("\nPress Enter to continue...");
+                await runReadMenu();
                 break;
             case "2":
-                await actionFetchInscription();
-                await prompt("\nPress Enter to continue...");
+                await runWriteMenu();
                 break;
             case "3":
-                await actionListSessionFiles();
-                await prompt("\nPress Enter to continue...");
-                break;
-            case "4":
-                await actionListAllFiles();
-                await prompt("\nPress Enter to continue...");
-                break;
-            case "5":
                 running = false;
                 break;
             default:

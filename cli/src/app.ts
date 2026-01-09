@@ -1,4 +1,4 @@
-import { runFileManager } from "./commands/core_example/file-manager";
+import { runFileManager } from "./ui/menus/file-manager";
 import { prompt, closeReadline } from "./utils/prompt";
 
 const clearScreen = () => console.clear();
