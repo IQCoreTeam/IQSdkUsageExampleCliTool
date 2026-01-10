@@ -1,70 +1,49 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
-import os from "node:os";
-import {Connection, Keypair} from "@solana/web3.js";
+import path from "node:path";
+import iqlabs from "iqlabs-sdk/src";
 
-import * as sdkModule from "iqlabs-sdk";
 
 import {logError, logInfo, logTable} from "../../utils/logger";
-import {codeInFromInput} from "../../core_example/using_code_in";
 import {prompt} from "../../utils/prompt";
+import {chunkString, DEFAULT_CHUNK_SIZE} from "../../utils/chunk";
+import {getWalletCtx} from "../../utils/wallet_manager";
 
-// Config - use env var or default
-const DEFAULT_RPC = process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
+const actionCodeIn= async (input:string,filename="test.txt") => {
+    const {connection,signer} = getWalletCtx();
+    logInfo("Chunking...");
+    const chunks = chunkString(input, DEFAULT_CHUNK_SIZE);
 
-// Check for local keypair.json first, then env var, then default solana cli keypair
-const findKeypair = (): string => {
-    const localKeypair = path.join(process.cwd(), "keypair.json");
-    if (fs.existsSync(localKeypair)) return localKeypair;
-    if (process.env.SOLANA_KEYPAIR_PATH) return process.env.SOLANA_KEYPAIR_PATH;
-    return path.join(os.homedir(), ".config/solana/id.json");
-};
-const DEFAULT_KEYPAIR = findKeypair();
+    logInfo(`Chunks: ${chunks.length}`);
+    const lastDotIndex = filename.lastIndexOf(".");
 
-const clearScreen = () => console.clear();
+    if (lastDotIndex === -1 || lastDotIndex === filename.length - 1) {
+        throw new Error(
+            "Filename must include an extension (e.g. example.txt, image.png)"
+        );
+    }
+    const filetype = filename.slice(lastDotIndex + 1);
 
-// Keypair loader
-const loadKeypair = (keypairPath: string): Keypair => {
-    const resolvedPath = keypairPath.startsWith("~")
-        ? path.join(os.homedir(), keypairPath.slice(1))
-        : keypairPath;
-    const secretKey = JSON.parse(fs.readFileSync(resolvedPath, "utf8"));
-    return Keypair.fromSecretKey(new Uint8Array(secretKey));
-};
+    logInfo("Uploading...");
+    const signature = await iqlabs.writer.codeIn(
+        {connection, signer},
+        chunks,
+        false,
+        filename,
+        0,
+        filetype,
+    );
 
-// File Manager context
-type FileManagerContext = {
-    connection: Connection;
-    signer: Keypair;
-    rpc: string;
-};
-
-let ctx: FileManagerContext | null = null;
-
-// Initialize context (uses defaults automatically)
-const initContext = (): FileManagerContext => {
-    if (ctx) return ctx;
-
-    const connection = new Connection(DEFAULT_RPC, "confirmed");
-    const signer = loadKeypair(DEFAULT_KEYPAIR);
-
-    process.env.SOLANA_RPC_ENDPOINT = DEFAULT_RPC;
-
-    logInfo(`RPC: ${DEFAULT_RPC}`);
-    logInfo(`Signer: ${signer.publicKey.toBase58()}`);
-
-    ctx = {connection, signer, rpc: DEFAULT_RPC};
-    return ctx;
-};
-
+    logInfo(`Signature: ${signature}`);
+    return signature;
+}
 const actionInscribeByTyping = async () => {
     const input = (await prompt("Text to inscribe: ")).trim();
+    const filename = (await prompt("filename include the ext: (ex: file.txt)")).trim();
     if (!input) {
         logError("No text provided");
         return;
     }
-    const {connection, signer} = initContext();
-    await codeInFromInput(connection, signer, input, "typed-text.txt", "text/plain");
+    await actionCodeIn(input, filename);
 };
 
 const actionInscribeFromFile = async () => {
@@ -73,28 +52,29 @@ const actionInscribeFromFile = async () => {
         logError("File not found");
         return;
     }
-/// we need to make it actually read the file and put the file
+
+    const filename = path.basename(filePath);
     const input = fs.readFileSync(filePath, "utf8");
-    const {connection, signer} = initContext();
-    await codeInFromInput(connection, signer, input, path.basename(filePath));
+
+    try {
+        await actionCodeIn(input,filename);
+    } catch (err) {
+        logError("Inscribe failed", err);
+    }
 };
 
 // Action: Fetch specific inscription by signature
 const actionFetchInscription = async () => {
-    initContext();
 
     console.log("\n--- Fetch Inscription ---\n");
-
     const signature = (await prompt("Transaction signature: ")).trim();
     if (!signature) {
         logError("No signature provided");
         return;
     }
-
     try {
-
         logInfo(" Reading content...");
-        const {data, metadata} = await sdkModule.reader.readCodeIn(signature);
+        const {data, metadata} = await iqlabs.reader.readCodeIn(signature);
         logInfo(metadata);
 
         if (data === null) {
@@ -113,22 +93,18 @@ const actionFetchInscription = async () => {
 
 // Action: List session files (large files only)
 const actionListSessionFiles = async () => {
-    const {signer} = initContext();
-
+    const {signer} = getWalletCtx();
     console.log("\n--- List Session Files ---\n");
 
-    const pubkeyInput = (await prompt(`User pubkey [${signer.publicKey.toBase58()}]: `)).trim();
-    const userPubkey = pubkeyInput || signer.publicKey.toBase58();
+    const userPubkey = signer.publicKey.toBase58();
 
     try {
-        logInfo(`Fetching sessions for: ${userPubkey}`);
-        const sessions = await sdkModule.reader.getSessionPdaList(userPubkey);
-
-        if (sessions.length === 0) {
-            logInfo("No sessions found");
-        } else {
-            logTable(sessions.map((s: string) => ({session: s})));
-        }
+        const sessions = await iqlabs.reader.getSessionPdaList(userPubkey);
+        logTable(sessions.map((s) => ({PDA_ADDRESS: s})));
+        ///TODO: If we dont mind of pda is become bit expensive, we might contain the transaction id of the db code in in session pda
+        // in new mode in session codein
+        // we finalize that with db codein (indexing to the wallet with metadata)
+        // so that we can return with the filenames
     } catch (err) {
         logError("List sessions failed", err);
     }
@@ -136,36 +112,25 @@ const actionListSessionFiles = async () => {
 
 // Action: List all files (linked list + session)
 const actionListAllFiles = async () => {
-    const {signer} = initContext();
-
+    const {signer} = getWalletCtx();
     console.log("\n--- List All Files ---\n");
 
-    const pdaInput = (await prompt("DB PDA address: ")).trim();
-    if (!pdaInput) {
-        logError("No PDA provided");
-        return;
-    }
     const limitInput = (await prompt("Limit [10]: ")).trim();
     const limit = parseInt(limitInput) || 10;
 
     const before = (await prompt("Before signature (optional): ")).trim() || undefined;
-
     try {
-        logInfo(`Fetching transactions for: ${pdaInput}`);
-        const DBPDA = await sdkModule.contract.getDbAccountPda(signer.publicKey); // make the profile value optional
-        const signatures = await sdkModule.reader.fetchAccountTransactions(DBPDA, {limit, before});
-        // in here . we can do
-       // await sdkModule.reader.readDBMetadata(each signatures) and update a signature array with metadata
-
+        const signatures = await iqlabs.reader.fetchDbTransactions(signer.publicKey, limit, before);
         if (signatures.length === 0) {
             logInfo("No transactions found");
         } else {
             logTable(
                 signatures.map((sig) => ({
                     signature: sig.signature,
-                   // slot: sig.slot,
                     err: sig.err ? "error" : "ok",
                     memo: sig.memo ?? "",
+                    onChainPath: sig.onChainPath ?? "",
+                    metadata: sig.metadata ?? "",
                 })),
             );
         }
@@ -208,7 +173,7 @@ const showWriteMenu = () => {
 const runReadMenu = async (): Promise<void> => {
     let readRunning = true;
     while (readRunning) {
-        clearScreen();
+        console.clear();
         showReadMenu();
 
         const choice = (await prompt("Select option [read]: ")).trim();
@@ -238,7 +203,7 @@ const runReadMenu = async (): Promise<void> => {
 const runWriteMenu = async (): Promise<void> => {
     let writeRunning = true;
     while (writeRunning) {
-        clearScreen();
+        console.clear();
         showWriteMenu();
 
         const choice = (await prompt("Select option [write]: ")).trim();
@@ -266,7 +231,7 @@ export const runFileManager = async (): Promise<void> => {
     let running = true;
 
     while (running) {
-        clearScreen();
+        console.clear();
         showMainMenu();
 
         const choice = (await prompt("Select option: ")).trim();

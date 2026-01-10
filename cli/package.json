@@ -12,7 +12,7 @@
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/web3.js": "^1.98.0",
     "dotenv": "^17.2.3",
-    "iqlabs-sdk": "file:../../IQLabsBackendSdk"
+    "iqlabs-sdk": "/Users/sumin/WebstormProjects/iqlabs-sdk"
   },
   "devDependencies": {
     "@types/bn.js": "^5.2.0",
