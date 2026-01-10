@@ -157,7 +157,7 @@ Args: `{ db_root_id: Bytes, connection_seed: Bytes, new_status: number }`
 
 Signature: `postChunkInstruction(builder, accounts, args): TransactionInstruction`
 Accounts: `{ user, session }`
-Args: `{ seq: BN, index: number, chunk: string, method: number, decode_break: number }`
+Args: `{ index: number, chunk: string, method: number, decode_break: number }`
 
 ### requestConnectionInstruction
 

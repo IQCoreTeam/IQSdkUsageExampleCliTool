@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { runFileManager } from "./ui/menus/file-manager";
 import { prompt, closeReadline } from "./utils/prompt";
-
+import iqlabs from "iqlabs-sdk/src";
+const rpcUrl = process.env.SOLANA_RPC_ENDPOINT!;
 const clearScreen = () => console.clear();
 
 const showMainMenu = () => {
@@ -12,6 +13,8 @@ const showMainMenu = () => {
     console.log("  2) SolChat");
     console.log("  3) Exit");
     console.log("\n============================\n");
+    console.log(iqlabs.setRpcUrl(rpcUrl))
+
 };
 
 const handleSolChat = async () => {

@@ -12,6 +12,7 @@ const actionCodeIn= async (input:string,filename="test.txt") => {
     const {connection,signer} = getWalletCtx();
     logInfo("Chunking...");
     const chunks = chunkString(input, DEFAULT_CHUNK_SIZE);
+    Buffer.byteLength(chunks[0], "utf8");
 
     logInfo(`Chunks: ${chunks.length}`);
     const lastDotIndex = filename.lastIndexOf(".");
@@ -24,6 +25,23 @@ const actionCodeIn= async (input:string,filename="test.txt") => {
     const filetype = filename.slice(lastDotIndex + 1);
 
     logInfo("Uploading...");
+    let lastPercent = -1;
+    const handleProgress = (percent: number) => {
+        if (percent === lastPercent) {
+            return;
+        }
+        lastPercent = percent;
+        if (process.stdout.isTTY) {
+            process.stdout.clearLine(0);
+            process.stdout.cursorTo(0);
+            process.stdout.write(`Uploading... ${percent}%`);
+            if (percent === 100) {
+                process.stdout.write("\n");
+            }
+        } else {
+            logInfo(`Uploading... ${percent}%`);
+        }
+    };
     const signature = await iqlabs.writer.codeIn(
         {connection, signer},
         chunks,
@@ -31,6 +49,7 @@ const actionCodeIn= async (input:string,filename="test.txt") => {
         filename,
         0,
         filetype,
+        handleProgress,
     );
 
     logInfo(`Signature: ${signature}`);
@@ -73,8 +92,29 @@ const actionFetchInscription = async () => {
         return;
     }
     try {
-        logInfo(" Reading content...");
-        const {data, metadata} = await iqlabs.reader.readCodeIn(signature);
+        logInfo("Reading...");
+        let lastPercent = -1;
+        const handleProgress = (percent: number) => {
+            if (percent === lastPercent) {
+                return;
+            }
+            lastPercent = percent;
+            if (process.stdout.isTTY) {
+                process.stdout.clearLine(0);
+                process.stdout.cursorTo(0);
+                process.stdout.write(`Reading... ${percent}%`);
+                if (percent === 100) {
+                    process.stdout.write("\n");
+                }
+            } else {
+                logInfo(`Reading... ${percent}%`);
+            }
+        };
+        const {data, metadata} = await iqlabs.reader.readCodeIn(
+            signature,
+            undefined,
+            handleProgress,
+        );
         logInfo(metadata);
 
         if (data === null) {

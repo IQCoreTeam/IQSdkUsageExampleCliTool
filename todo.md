@@ -6,3 +6,6 @@ let's figure out the cleanest way to apply all on the web cli  so that we can re
 3. so we can think about change the writer mode to return the transaction and make sign in the web etc but also actually it will hard in highlevel function.
 4. so never mind! 
 5. cd cli and npx tsx src/app.ts to run the cli
+
+# PEOPLE NEED TO CHUNK BY THE BYTE SIZE NOT THE STRING LENGTH ! IF WE CAN SUPPORT THE CHUNK METHOD IN SDK SO PEOPLE NOT GET WRONG LETS DO IT 
+# SUPPORT EMOJI 
