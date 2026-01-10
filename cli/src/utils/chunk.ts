@@ -1,15 +1,15 @@
 export const DEFAULT_CHUNK_SIZE = 900;
 
 export const chunkString = (
-  value: string,
-  chunkSize: number = DEFAULT_CHUNK_SIZE,
+    value: string,
+    chunkSize: number = DEFAULT_CHUNK_SIZE,
 ) => {
-  if (value.length === 0) {
-    return [];
-  }
-  const chunks: string[] = [];
-  for (let index = 0; index < value.length; index += chunkSize) {
-    chunks.push(value.slice(index, index + chunkSize));
-  }
-  return chunks;
+    if (value.length === 0) {
+        return [];
+    }
+    const chunks: string[] = [];
+    for (let index = 0; index < value.length; index += chunkSize) {
+        chunks.push(value.slice(index, index + chunkSize));
+    }
+    return chunks;
 };

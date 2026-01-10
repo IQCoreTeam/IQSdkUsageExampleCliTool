@@ -49,7 +49,7 @@
 // class ChatService {
 //   constructor(deps: { rpcUrl: string; keypairPath: string; rootSeed: string; chatTableSeed: string; })
 //
-//   async setupCliDemo(): Promise<void> // follow the steps described in core_example/setup.ts
+//   async setupCliDemo(): Promise<void> // follow the steps described in file_manager/setup.ts
 //
 //   async ensureRootAndTables(): Promise<void>
 //     - If the root PDA is missing, send initializeDbRootInstruction.

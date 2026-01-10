@@ -7,8 +7,8 @@
 
 // import prompts from 'prompts'
 // import { runChatCommand } from '../commands/app_commands/chat/chat'
-// import { runSetupCommand } from '../commands/core_example/setup'
-// import { runFileManagerCommand } from '../commands/core_example/file-manager' // implement the flow documented in file-manager.ts
+// import { runSetupCommand } from '../commands/file_manager/setup'
+// import { runFileManagerCommand } from '../commands/file_manager/file-manager' // implement the flow documented in file-manager.ts
 // import { logInfo } from '../utils/logger'
 
 // export async function showMainMenu() {
