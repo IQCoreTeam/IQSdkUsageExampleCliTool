@@ -11,3 +11,5 @@ let's figure out the cleanest way to apply all on the web cli  so that we can re
 # SUPPORT EMOJI 
 
 # SEARCH THE TODO IN WHOLE CODESPACE AND CHECK IT 
+
+# you make the database simple , so delete something like TableTrailEmitted to clean up 

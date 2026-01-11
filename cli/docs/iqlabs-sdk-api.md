@@ -29,8 +29,8 @@ InstructionName =
   | create_session
   | create_table
   | database_instruction
-  | db_code_in
-  | db_code_in_for_free
+  | user_inventory_code_in
+  | user_inventory_code_in_for_free
   | initialize_config
   | initialize_db_root
   | manage_connection
@@ -76,7 +76,7 @@ Returns: `ProgramProfile`
 - `getUserPda(profile: ProgramProfile, user: PublicKey): PublicKey`
 - `getSessionPda(profile: ProgramProfile, user: PublicKey, seq: bigint | number): PublicKey`
 - `getCodeAccountPda(profile: ProgramProfile, user: PublicKey): PublicKey`
-- `getDbAccountPda(profile: ProgramProfile, user: PublicKey): PublicKey`
+- `getUserInventoryPda(profile: ProgramProfile, user: PublicKey): PublicKey`
 - `getServerAccountPda(profile: ProgramProfile, user: PublicKey, serverId: string): PublicKey`
 
 ## Instruction builder
@@ -123,16 +123,16 @@ Signature: `databaseInstructionInstruction(builder, accounts, args): Transaction
 Accounts: `{ db_root, table, instruction_table, table_ref, target_table_ref, signer_ata?, signer }`
 Args: `{ db_root_id: Bytes, table_seed: Bytes, table_name: Bytes, target_tx: Bytes, content_json_tx: Bytes }`
 
-### dbCodeInInstruction
+### userInventoryCodeInInstruction
 
-Signature: `dbCodeInInstruction(builder, accounts, args): TransactionInstruction`
-Accounts: `{ user, db_account, system_program? }`
+Signature: `userInventoryCodeInInstruction(builder, accounts, args): TransactionInstruction`
+Accounts: `{ user, user_inventory, system_program? }`
 Args: `{ on_chain_path: string, metadata: string, session: SessionFinalize | null }`
 
-### dbCodeInForFreeInstruction
+### userInventoryCodeInForFreeInstruction
 
-Signature: `dbCodeInForFreeInstruction(builder, accounts, args): TransactionInstruction`
-Accounts: `{ user, db_account, config, system_program? }`
+Signature: `userInventoryCodeInForFreeInstruction(builder, accounts, args): TransactionInstruction`
+Accounts: `{ user, user_inventory, config, system_program? }`
 Args: `{ on_chain_path: string, metadata: string, session: SessionFinalize | null, proof: Bytes[] }`
 
 ### initializeConfigInstruction
@@ -207,7 +207,7 @@ Args: `{ db_root_id: Bytes, meta: Bytes }`
 ### userInitializeInstruction
 
 Signature: `userInitializeInstruction(builder, accounts): TransactionInstruction`
-Accounts: `{ user, code_account, user_state, db_account, system_program? }`
+Accounts: `{ user, code_account, user_state, user_inventory, system_program? }`
 Args: none
 
 ### writeConnectionDataInstruction

@@ -53,12 +53,12 @@
 //     createPinocchioProfile,
 //     createSessionInstruction,
 //     createTableInstruction,
-//     dbCodeInInstruction,
+//     userInventoryCodeInInstruction,
 //     getCodeAccountPda,
 //     getConnectionInstructionTablePda,
 //     getConnectionTablePda,
 //     getConnectionTableRefPda,
-//     getDbAccountPda,
+//     getUserInventoryPda,
 //     getDbRootPda,
 //     getInstructionTablePda,
 //     getSessionPda,
@@ -105,10 +105,10 @@
 //   npm run dev -- <command> [options]
 //
 // Commands:
-//   upload-session   Upload chunks, finalize with db_code_in, print signature
-//   read-session     Read an inscription from its db_code_in signature
+//   upload-session   Upload chunks, finalize with user_inventory_code_in, print signature
+//   read-session     Read an inscription from its user_inventory_code_in signature
 //   roundtrip        Upload then read back and compare
-//   linked-list-codein  Linked-list db_code_in test (standalone)
+//   linked-list-codein  Linked-list user_inventory_code_in test (standalone)
 //   instruction-suite  Run instruction-family smoke test (codein, iqdb, connection, user)
 //
 // Options:
@@ -124,7 +124,7 @@
 //   --chunk-size <n>          Chunk size in characters (default: ${DEFAULT_CHUNK_SIZE})
 //   --force-session          Require session upload (>=${DEFAULT_LINKED_LIST_THRESHOLD} chunks)
 //   --repeat <n>             Repeat text payload n times
-//   --signature <sig>        db_code_in transaction signature
+//   --signature <sig>        user_inventory_code_in transaction signature
 //   --speed <light|medium|heavy|extreme>  Session read speed profile (default: ${DEFAULT_SPEED})
 //   --max-rps <n>            Override read requests per second
 //   --max-concurrency <n>    Override read concurrency
@@ -445,7 +445,7 @@
 //         user: signer.publicKey,
 //         code_account: getCodeAccountPda(profile, signer.publicKey),
 //         user_state: userState,
-//         db_account: getDbAccountPda(profile, signer.publicKey),
+//         user_inventory: getUserInventoryPda(profile, signer.publicKey),
 //         system_program: SystemProgram.programId,
 //     });
 //
@@ -504,15 +504,15 @@
 //         filename: toString(flags.filename) ?? "linked_list.txt",
 //         total_chunks: chunks.length,
 //     });
-//     const dbAccount = getDbAccountPda(profile, signer.publicKey);
+//     const userInventory = getUserInventoryPda(profile, signer.publicKey);
 //     const feeReceiver = new PublicKey(DEFAULT_WRITE_FEE_RECEIVER);
 //
-//     logStep("Finalize db_code_in");
-//     const dbIx = dbCodeInInstruction(
+//     logStep("Finalize user_inventory_code_in");
+//     const dbIx = userInventoryCodeInInstruction(
 //         builder,
 //         {
 //             user: signer.publicKey,
-//             db_account: dbAccount,
+//             user_inventory: userInventory,
 //             receiver: feeReceiver,
 //             system_program: SystemProgram.programId,
 //             session: sessionAccount,
@@ -521,7 +521,7 @@
 //     );
 //     const signature = await sendTx(connection, signer, dbIx);
 //
-//     logStep("Fetching db_code_in metadata");
+//     logStep("Fetching user_inventory_code_in metadata");
 //     const metadataResult = await retry(
 //         () => reader.readDBMetadata(signature),
 //         {attempts: 10, delayMs: 2000},
@@ -589,7 +589,7 @@
 //     }
 //
 //     const uploadSpeed = toString(flags.speed) ?? DEFAULT_SPEED;
-//     logStep("Starting upload (create session, post chunks, db_code_in)");
+//     logStep("Starting upload (create session, post chunks, user_inventory_code_in)");
 //     const txSignature = await writer.codein(
 //         {connection, signer},
 //         chunks,
@@ -600,9 +600,9 @@
 //     );
 //
 //     logStep("Upload completed");
-//     console.log(`db_code_in signature: ${txSignature}`);
+//     console.log(`user_inventory_code_in signature: ${txSignature}`);
 //
-//     logStep("Fetching db_code_in metadata");
+//     logStep("Fetching user_inventory_code_in metadata");
 //     const metadata = await retry(
 //         () => reader.readDBMetadata(txSignature),
 //         {attempts: 10, delayMs: 2000},
@@ -631,7 +631,7 @@
 //
 //     const readSpeed = resolveReadSpeed(flags);
 //
-//     logStep("Fetching db_code_in metadata");
+//     logStep("Fetching user_inventory_code_in metadata");
 //     const metadata = await retry(
 //         () => reader.readDBMetadata(signature),
 //         {attempts: 10, delayMs: 2000},
@@ -719,14 +719,14 @@
 //         user: signer.publicKey,
 //         code_account: getCodeAccountPda(profile, signer.publicKey),
 //         user_state: signerUserState,
-//         db_account: getDbAccountPda(profile, signer.publicKey),
+//         user_inventory: getUserInventoryPda(profile, signer.publicKey),
 //         system_program: SystemProgram.programId,
 //     });
 //     await ensureUserInitialized(connection, receiver, builder, {
 //         user: receiver.publicKey,
 //         code_account: getCodeAccountPda(profile, receiver.publicKey),
 //         user_state: receiverUserState,
-//         db_account: getDbAccountPda(profile, receiver.publicKey),
+//         user_inventory: getUserInventoryPda(profile, receiver.publicKey),
 //         system_program: SystemProgram.programId,
 //     });
 //

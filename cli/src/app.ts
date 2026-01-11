@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { runFileManager } from "./ui/menus/file-manager";
+import { runChatCommand } from "./ui/menus/chat";
 import { prompt, closeReadline } from "./utils/prompt";
 import iqlabs from "iqlabs-sdk/src";
 const rpcUrl = process.env.SOLANA_RPC_ENDPOINT!;
@@ -19,12 +20,7 @@ const showMainMenu = () => {
 
 const handleSolChat = async () => {
     clearScreen();
-    console.log("\n============================");
-    console.log("          SolChat           ");
-    console.log("============================\n");
-    // TODO: Implement SolChat menu
-    console.log("[SolChat - Coming Soon]");
-    await prompt("\nPress Enter to return to main menu...");
+    await runChatCommand();
 };
 
 const main = async () => {

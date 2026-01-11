@@ -141,9 +141,9 @@ const actionListSessionFiles = async () => {
     try {
         const sessions = await iqlabs.reader.getSessionPdaList(userPubkey);
         logTable(sessions.map((s) => ({PDA_ADDRESS: s})));
-        ///TODO: If we dont mind of pda is become bit expensive, we might contain the transaction id of the db code in in session pda
+        ///TODO: If we dont mind of pda is become bit expensive, we might contain the transaction id of the user inventory code in in session pda
         // in new mode in session codein
-        // we finalize that with db codein (indexing to the wallet with metadata)
+        // we finalize that with user inventory code in (indexing to the wallet with metadata)
         // so that we can return with the filenames
     } catch (err) {
         logError("List sessions failed", err);
@@ -160,7 +160,7 @@ const actionListAllFiles = async () => {
 
     const before = (await prompt("Before signature (optional): ")).trim() || undefined;
     try {
-        const signatures = await iqlabs.reader.fetchDbTransactions(signer.publicKey, limit, before);
+        const signatures = await iqlabs.reader.fetchInventoryTransactions(signer.publicKey, limit, before);
         if (signatures.length === 0) {
             logInfo("No transactions found");
         } else {

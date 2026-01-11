@@ -1,114 +1,572 @@
-// 이것은 채팅관련 로직 , 그리고
-///Users/sumin/WebstormProjects/iqlabs-sdk-cli-example/cli/src/ui/menus/chat.ts 이거는 cmd로직인데 방드갔다 나오는건 여기 함수를 쓰면서 wrapping 하나?
-////Users/sumin/WebstormProjects/solchat-web/lib/onchainDB 에 레거시 구현이 있음.
+import {createRequire} from "node:module";
+import {randomUUID} from "node:crypto";
+import {
+    PublicKey,
+    SystemProgram,
+    SendTransactionError,
+    Transaction,
+    sendAndConfirmTransaction,
+    type TransactionInstruction,
+} from "@solana/web3.js";
+import type {Connection, Signer} from "@solana/web3.js";
+import {BorshAccountsCoder, type Idl} from "@coral-xyz/anchor";
+import iqlabs from "iqlabs-sdk/src";
 
-// 최신 컨트랙트 변경 사항 위치:
-///Users/sumin/RustroverProjects/IQLabsContract (updates.txt 참고).
+import {getWalletCtx} from "../../utils/wallet_manager";
 
-////Users/sumin/WebstormProjects/solchat-web/lib/onchainDB 에서 동작 방식을 확인.
-// /Users/sumin/WebstormProjects/iqlabs-sdk/src 에 메인 SDK 소스가 있음.
-//이 CLI 코드를 작성할 때 해당 SDK 소스 + updates.txt 를 함께 참고.
-//
+const require = createRequire(import.meta.url);
+const IDL = require("iqlabs-sdk/idl/code_in.json") as Idl;
 
-/**
- * ChatService 의사코드 (실제 코드 작성 전에 위 레거시 주석을 읽어둔다)
- * -----------------------------------------------------------------------------
- * 목표: solchat-web/lib/onchainDB 의 connection/DM/message 흐름을 CLI로 포팅.
- *       iqlabs-sdk/src (contract + sdk)에서 export되는 함수만 사용.
- *       각 단계에서 의존할 SDK/lib를 명확히 적어 구현을 단순화.
- *       이 파일 전체가 SDK 쇼케이스 CLI의 설계도 역할.
- */
+const DEFAULT_ROOT_ID = "solchat-root";
+const DM_TABLE_NAME = "dm";
+const DM_COLUMNS = ["id", "text", "file", "sender", "timestamp"];
+const DM_ID_COL = "id";
 
-// 1. 의존성 로딩 계획 -------------------------------------------------
-// - web3.js: Connection, Keypair, PublicKey, SystemProgram, TransactionInstruction
-// - @solana/spl-token: getAssociatedTokenAddress (gate_mint가 있을 때만)
+const makeMessageId = (sliceLength?: number) => {
+    const uuid = typeof randomUUID === "function" ? randomUUID() : "";
+    const id = uuid || Math.random().toString(36).slice(2, 10);
+    return typeof sliceLength === "number" ? id.slice(0, sliceLength) : id;
+};
 
-// - iqlabs-sdk reader/writer:
- //    requestConnection ,writeConnectionRow , writeRow, reader.readUserState,
-//      reader.fetchAccountTransactions
+const sendInstruction = async (
+    connection: Connection,
+    signer: Signer,
+    instruction: TransactionInstruction,
+) => {
+    const tx = new Transaction().add(instruction);
+    try {
+        return await sendAndConfirmTransaction(connection, tx, [signer]);
+    } catch (err) {
+        if (err instanceof SendTransactionError) {
+            try {
+                const logs = await err.getLogs(connection);
+                if (logs.length > 0) {
+                    console.error("Transaction logs:", logs);
+                }
+            } catch {
+                // ignore log fetch errors
+            }
+        }
+        throw err;
+    }
+};
 
-// use codein from file manager's actionCodeIn
-// do the   const {data, metadata} = await iqlabs.reader.readCodeIn(
-//             signature,
-//             undefined,
-//             handleProgress,
-//         ); to read the things.
+export class ChatService {
+    readonly connection: Connection;
+    readonly signer: Signer;
+    readonly dbRootId: Uint8Array;
+    readonly programId: PublicKey;
+    readonly builder: ReturnType<typeof iqlabs.contract.createInstructionBuilder>;
+    readonly accountCoder: BorshAccountsCoder;
 
+    constructor(rootId = DEFAULT_ROOT_ID) {
+        const {connection, signer} = getWalletCtx();
+        this.connection = connection;
+        this.signer = signer;
+        this.dbRootId = Buffer.from(rootId, "utf8");
+        this.programId = iqlabs.contract.getProgramId();
+        this.builder = iqlabs.contract.createInstructionBuilder(IDL, this.programId);
+        this.accountCoder = new BorshAccountsCoder(IDL);
+    }
 
-// - cli/src/config.ts: RPC 엔드포인트, 기본 root/table seed, 로컬 키페어 경로 로드 혹은 입력받기,
-// - 즉, setupCliDemo에서 받은 rootId(Bytes)를 ChatService에 저장하고 모든 명령에서 재사용
-// - 레거시 참고: /Users/sumin/WebstormProjects/solchat-web/lib/iq/* (reader/transaction 코드)
+    async setupCliDemo() {
+        await this.ensureRootAndTables();
+        await this.ensureUserState();
+    }
 
-// 2. CLI make app (root 초기화 & 메타데이터 헬퍼) -----------------------
-// async function makeCliApp(rootId: string): Promise<void> {
-//   - rootId를 프롬프트나 CLI 플래그로 받는다.
-//   - rootId -> Bytes 로 변환 (TextEncoder 사용).
-//   - getProgramId(runtime)로 programId를 정하고 createInstructionBuilder(IDL, programId) 준비.
-//   - getDbRootPda(rootBytes, programId) 계산.
-//   - initializeDbRootInstruction(builder, { db_root, signer }, { db_root_id: rootBytes }) 호출.
-//   - Transaction 생성 후 instruction 추가, sendAndConfirmTransaction 실행.
-//   - 생성된 root PDA 주소 / txid 로그 출력. app builded! 하고 dbpda 시드와 정보를 출력
-// }
+    async ensureRootAndTables() {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const info = await this.connection.getAccountInfo(dbRoot);
+        if (info) {
+            return {dbRoot, created: false};
+        }
+        const ix = iqlabs.contract.initializeDbRootInstruction(
+            this.builder,
+            {
+                db_root: dbRoot,
+                signer: this.signer.publicKey,
+                system_program: SystemProgram.programId,
+            },
+            {db_root_id: this.dbRootId},
+        );
+        const signature = await sendInstruction(this.connection, this.signer, ix);
+        return {dbRoot, created: true, signature};
+    }
 
-// async function updateUserMetadata(metadataTxId: string) { ... } // updateUserMetadataInstruction(meta = Bytes(txid))
-// solchat dbroot id 여기에 상수로 두기
-// 3. ChatService 구조 -----------------------------------------------------
-// class ChatService {
-//
-//   async setupCliDemo(): Promise<void> // cli/src/ui/menus/file-manager.ts 의 init 흐름 참고
-//
-//   async ensureRootAndTables( ): Promise<void>
-//     - root PDA가 없으면 initializeDbRootInstruction 전송.
-//     - 채팅 테이블 존재 여부 확인, 없으면 createTableInstruction 실행 (instruction_table + receiver 필요).
-//     - friend/connection 테이블이 필요하면 createExtTableInstruction 또는 createAdminTableInstruction 사용.
-//
-//   async ensureUserState(metadataTxId?: string): Promise<void>
-//     - getUserPda(wallet.publicKey, programId) + getCodeAccountPda/getDbAccountPda 계산.
-//     - 없으면 userInitializeInstruction({ user, code_account, user_state, db_account }) 전송.
+    async ensureUserState(metadataTxId?: string) {
+        const user = this.signer.publicKey;
+        const userState = iqlabs.contract.getUserPda(user, this.programId);
+        const codeAccount = iqlabs.contract.getCodeAccountPda(user, this.programId);
+        const userInventory = iqlabs.contract.getUserInventoryPda(user, this.programId);
+        const info = await this.connection.getAccountInfo(userInventory);
+        if (!info) {
+            const ix = iqlabs.contract.userInitializeInstruction(this.builder, {
+                user,
+                code_account: codeAccount,
+                user_state: userState,
+                user_inventory: userInventory,
+                system_program: SystemProgram.programId,
+            });
+            await sendInstruction(this.connection, this.signer, ix);
+        }
+        if (metadataTxId) {
+            await this.updateUserMetadata(metadataTxId);
+        }
+        return {userState, userInventory, codeAccount};
+    }
 
-//   async requestConnection(partner: PublicKey, payload: { handle: string; intro: string })
-//     - connection_seed = deriveDmSeed(partyA, partyB) (정렬 + keccak) 또는 updates.txt 규칙 재현.
-//     - .dbroot id 여기에 상수 사용
-//     - getConnectionTablePda, getConnectionInstructionTablePda,
-//       getConnectionTableRefPda, getTargetConnectionTableRefPda, getUserPda로 PDA 계산.
-//     - RPC로 connection 테이블/계정 존재 여부 확인 후 없을 때만 requestConnectionInstruction 전송.
-//     - requestConnectionInstruction(builder, accounts, args)로 CPDA 생성.
-//
-//   async manageConnection(connectionSeed: Bytes, newStatus: number)
-//     - manageConnectionInstruction(builder, { db_root, connection_table, signer }, { ... }) 사용.
-//     - 상태/requester/blocker 로직은 updates.txt 설명 그대로 구현.
-//
-//   async sendChat(roomSeed: Bytes, message: string, handle: string)
-//     - utils/chunk.ts chunkString (기본 850 bytes)로 메시지 분할 -> chunks[]. 분할 코드는 사실utils 안에 있는거써 /Users/sumin/WebstormProjects/iqlabs-sdk-cli-example/cli/src/utils/chunk.ts
-//     - writer.codeIn(...)을 우선 사용해 inline metadata/linked-list/session 자동 처리.
- // writeRow 으로 코드인을 쓰면서, 인라인, (링크드리스트, 세션전송 링크드리스트와 세션전송은 같은 메소드로 처리 )
-/// 하지만 지금 생각할때에는 트젝을 인스크립션과 writerow를 둘다 하는게 맞나 싶긴 함, 그래서 컨트랙에서 아님sdk에서 인라인일시, 사실 인라인이 아니더라도어쨋든 링크를 포함하며 인라인을 만들어야 하므로
-//동작은 같을수있는데, 그러면 두개의 인스트럭션을 동시에 보내도 될지 한번 보자, 버퍼 오버런이 나올수도 있는건 감안해보고 고려하자
-//TODO: 내일 인라인에 대한 좀더 친절한 주석을 적는다.
+    async updateUserMetadata(metadataTxId: string) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const userState = iqlabs.contract.getUserPda(this.signer.publicKey, this.programId);
+        const ix = iqlabs.contract.updateUserMetadataInstruction(
+            this.builder,
+            {
+                user: userState,
+                db_root: dbRoot,
+                signer: this.signer.publicKey,
+                system_program: SystemProgram.programId,
+            },
+            {
+                db_root_id: this.dbRootId,
+                meta: Buffer.from(metadataTxId, "utf8"),
+            },
+        );
+        return sendInstruction(this.connection, this.signer, ix);
+    }
 
-//       row_json_tx는 TableTrail payload 규칙을 적용: JSON { data: rowJson, source_tx: dbCodeInSig  or session id }가 들어가면 사용,
-// TODO: 내일 이 규칙 한번 자세히 봐
+    async requestConnection(
+        partner: PublicKey,
+        payload?: { handle?: string; intro?: string },
+    ) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const requester = this.signer.publicKey;
+        const requesterBase58 = requester.toBase58();
+        const receiverBase58 = partner.toBase58();
+        const connectionSeed = iqlabs.utils.deriveDmSeed(requesterBase58, receiverBase58);
+        const connectionSeedBuf = Buffer.from(connectionSeed);
+        const connectionTable = iqlabs.contract.getConnectionTablePda(
+            dbRoot,
+            connectionSeed,
+            this.programId,
+        );
+        const info = await this.connection.getAccountInfo(connectionTable);
+        if (info) {
+            return {connectionSeed, connectionTable, created: false};
+        }
 
-//       아니면 db_code_in signature만 저장. // 인라인일시 아닐시 설명이 자세해야 함
-//     - connection_table writer 목록 / gate mint 체크 준수 (gate_mint가 있으면 signer_ata 필요).
-//
-//   async fetchChatHistory(roomSeed: Bytes, options)
-//     - reader.fetchAccountTransactions(roomTable, { before, limit }) 사용.
-//     - 각 row tx마다 reader.readCodeIn(signature) 호출해서 TableTrailEmitted payload 파싱
-//       (inline data 또는 source_tx) 후 db_code_in/session/linked-list로 폴백.
-//     - db row payload에서 handle/timestamp 추출.
-// 이건 G가 만든 rate limiter 를 이용하면서 다 해보자
-//
-//   helper: deriveRoomTable(roomSeed) // 채팅 룸 테이블용 PDA를 모두 계산
-//     - getTablePda(db_root, roomSeed, programId)
-//     - getInstructionTablePda(db_root, roomSeed, programId)
-//     - table_ref/target_table_ref는 connection 테이블에만 필요.
-//
-// }
-//
-//
-// 5. 테스트 계획
-// - web3를 mock해서 PDA derivation + TableTrail payload 형식을 검증하는 test/chat-service.spec.ts 작성.
-// - e2e: devnet RPC + fixture wallet 환경에서 실행 (env로 설정 가능).
-//
-// TODO: 구현 시 각 bullet을 실제 타입/함수로 치환하고 /Users/sumin/WebstormProjects/iqlabs-sdk/src 기준으로 시그니처 확인.
+        const instructionTable = iqlabs.contract.getConnectionInstructionTablePda(
+            dbRoot,
+            connectionSeed,
+            this.programId,
+        );
+        const tableRef = iqlabs.contract.getConnectionTableRefPda(
+            dbRoot,
+            connectionSeed,
+            this.programId,
+        );
+        const targetTableRef = iqlabs.contract.getTargetConnectionTableRefPda(
+            dbRoot,
+            connectionSeed,
+            this.programId,
+        );
+        const requesterUser = iqlabs.contract.getUserPda(requester, this.programId);
+        const receiverUser = iqlabs.contract.getUserPda(partner, this.programId);
+
+        const payloadBody: Record<string, string> = {dmTable: connectionTable.toBase58()};
+        if (payload?.handle) {
+            payloadBody.handle = payload.handle;
+        }
+        if (payload?.intro) {
+            payloadBody.intro = payload.intro;
+        }
+
+        const ix = iqlabs.contract.requestConnectionInstruction(
+            this.builder,
+            {
+                requester,
+                db_root: dbRoot,
+                connection_table: connectionTable,
+                instruction_table: instructionTable,
+                requester_user: requesterUser,
+                receiver_user: receiverUser,
+                table_ref: tableRef,
+                target_table_ref: targetTableRef,
+                system_program: SystemProgram.programId,
+            },
+            {
+                db_root_id: this.dbRootId,
+                connection_seed: connectionSeedBuf,
+                receiver: partner,
+                table_name: Buffer.from(DM_TABLE_NAME, "utf8"),
+                column_names: DM_COLUMNS.map((name) => Buffer.from(name, "utf8")),
+                id_col: Buffer.from(DM_ID_COL, "utf8"),
+                ext_keys: [],
+                user_payload: Buffer.from(JSON.stringify(payloadBody), "utf8"),
+            },
+        );
+        const signature = await sendInstruction(this.connection, this.signer, ix);
+        return {connectionSeed, connectionTable, created: true, signature};
+    }
+
+    async manageConnection(connectionSeed: Uint8Array, newStatus: number) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const connectionTable = iqlabs.contract.getConnectionTablePda(
+            dbRoot,
+            connectionSeed,
+            this.programId,
+        );
+        const info = await this.connection.getAccountInfo(connectionTable);
+        if (!info) {
+            throw new Error("connection table not found");
+        }
+        const ix = iqlabs.contract.manageConnectionInstruction(
+            this.builder,
+            {
+                db_root: dbRoot,
+                connection_table: connectionTable,
+                signer: this.signer.publicKey,
+            },
+            {
+                db_root_id: this.dbRootId,
+                connection_seed: Buffer.from(connectionSeed),
+                new_status: newStatus,
+            },
+        );
+        const signature = await sendInstruction(this.connection, this.signer, ix);
+        return {signature, connectionTable};
+    }
+
+    async sendChat(roomSeed: Uint8Array, message: string, handle?: string) {
+        const trimmed = message.trim();
+        if (!trimmed) {
+            throw new Error("message is empty");
+        }
+        const rowJson = JSON.stringify({
+            id: makeMessageId(),
+            text: trimmed,
+            sender: handle?.trim() || this.signer.publicKey.toBase58(),
+            timestamp: Date.now(),
+        });
+        return iqlabs.writer.writeRow(
+            this.connection,
+            this.signer,
+            this.dbRootId,
+            roomSeed,
+            rowJson,
+        );
+    }
+
+    async sendDm(dmSeed: Uint8Array, message: string, handle?: string) {
+        const trimmed = message.trim();
+        if (!trimmed) {
+            throw new Error("message is empty");
+        }
+        const rowJson = JSON.stringify({
+            id: makeMessageId(12),
+            text: trimmed,
+            sender: handle?.trim() || this.signer.publicKey.toBase58(),
+            timestamp: Date.now(),
+        });
+        return iqlabs.writer.writeConnectionRow(
+            this.connection,
+            this.signer,
+            this.dbRootId,
+            dmSeed,
+            rowJson,
+        );
+    }
+
+    async fetchChatHistory(
+        roomSeed: Uint8Array,
+        options: { before?: string; limit?: number } = {},
+    ) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const table = iqlabs.contract.getTablePda(dbRoot, roomSeed, this.programId);
+        const signatures = await iqlabs.reader.fetchAccountTransactions(table, options);
+        const rows: Array<Record<string, unknown>> = [];
+
+        for (const sig of signatures) {
+            const {data, metadata} = await iqlabs.reader.readCodeIn(sig.signature);
+            if (!data) {
+                rows.push({signature: sig.signature, metadata, data: null});
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(data);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    rows.push({...parsed, __txSignature: sig.signature});
+                    continue;
+                }
+            } catch {
+                // fallthrough
+            }
+            rows.push({signature: sig.signature, metadata, data});
+        }
+        return rows;
+    }
+
+    async fetchDmHistory(
+        dmSeed: Uint8Array,
+        options: { before?: string; limit?: number } = {},
+    ) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const connectionTable = iqlabs.contract.getConnectionTablePda(
+            dbRoot,
+            dmSeed,
+            this.programId,
+        );
+        const signatures = await iqlabs.reader.fetchAccountTransactions(
+            connectionTable,
+            options,
+        );
+        const rows: Array<Record<string, unknown>> = [];
+
+        for (const sig of signatures) {
+            const {data, metadata} = await iqlabs.reader.readCodeIn(sig.signature);
+            if (!data) {
+                rows.push({signature: sig.signature, metadata, data: null});
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(data);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    rows.push({...parsed, __txSignature: sig.signature});
+                    continue;
+                }
+            } catch {
+                // fallthrough
+            }
+            rows.push({signature: sig.signature, metadata, data});
+        }
+        return rows;
+    }
+
+    async listFriends() {
+        const owner = this.signer.publicKey.toBase58();
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const accounts = await this.connection.getProgramAccounts(this.programId);
+        const friends = [] as any[];
+
+        for (const {account, pubkey} of accounts) {
+            let decoded: any;
+            try {
+                decoded = this.accountCoder.decode("Connection", account.data);
+            } catch {
+                continue;
+            }
+            const partyA = new PublicKey(decoded.party_a).toBase58();
+            const partyB = new PublicKey(decoded.party_b).toBase58();
+            if (partyA !== owner && partyB !== owner) {
+                continue;
+            }
+            const seed = iqlabs.utils.deriveDmSeed(partyA, partyB);
+            const expected = iqlabs.contract.getConnectionTablePda(
+                dbRoot,
+                seed,
+                this.programId,
+            );
+            if (!expected.equals(pubkey)) {
+                continue;
+            }
+            const friendAddress = partyA === owner ? partyB : partyA;
+            const statusCode = decoded.status;
+            const status =
+                statusCode === iqlabs.contract.CONNECTION_STATUS_PENDING
+                    ? "pending"
+                    : statusCode === iqlabs.contract.CONNECTION_STATUS_APPROVED
+                        ? "approved"
+                        : statusCode === iqlabs.contract.CONNECTION_STATUS_BLOCKED
+                            ? "blocked"
+                            : "unknown";
+            const rawTimestamp =
+                decoded.last_timestamp ?? decoded.lastTimestamp ?? 0;
+            const lastTimestamp =
+                typeof rawTimestamp === "number"
+                    ? rawTimestamp
+                    : Number(rawTimestamp?.toString?.() ?? 0);
+
+            friends.push({
+                address: friendAddress,
+                status,
+                statusCode,
+                requester: decoded.requester,
+                blocker: decoded.blocker,
+                seed,
+                table: pubkey,
+                partyA,
+                partyB,
+                lastTimestamp,
+            });
+        }
+
+        friends.sort((a, b) => Number(b.lastTimestamp ?? 0) - Number(a.lastTimestamp ?? 0));
+        return friends;
+    }
+
+    async listRooms() {
+        const list = await iqlabs.writer.getTablelistFromRoot(
+            this.connection,
+            this.dbRootId,
+        );
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const seedHexes = [
+            ...new Set([...list.tableSeeds, ...list.globalTableSeeds]),
+        ];
+        const rooms = [] as any[];
+
+        for (const seedHex of seedHexes) {
+            const seed = Buffer.from(seedHex, "hex");
+            const table = iqlabs.contract.getTablePda(dbRoot, seed, this.programId);
+            const info = await this.connection.getAccountInfo(table);
+            let name = seedHex;
+            if (info) {
+                try {
+                    const decoded = this.accountCoder.decode("Table", info.data) as {
+                        name: Uint8Array;
+                    };
+                    const decodedName = Buffer.from(decoded.name)
+                        .toString("utf8")
+                        .replace(/\0+$/, "")
+                        .trim();
+                    if (decodedName) {
+                        name = decodedName;
+                    }
+                } catch {
+                    // ignore decode failures
+                }
+            }
+            rooms.push({
+                name,
+                seed,
+                seedHex,
+                table,
+            });
+        }
+
+        return rooms;
+    }
+
+    async createRoom(name: string) {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            throw new Error("room name is empty");
+        }
+        await this.ensureRootAndTables();
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const tableSeed = iqlabs.utils.toSeedBytes(trimmed);
+        const tableSeedBuf = Buffer.from(tableSeed);
+        const table = iqlabs.contract.getTablePda(dbRoot, tableSeed, this.programId);
+        const instructionTable = iqlabs.contract.getInstructionTablePda(
+            dbRoot,
+            tableSeed,
+            this.programId,
+        );
+        const existing = await this.connection.getAccountInfo(table);
+        if (existing) {
+            return {table, instructionTable, created: false};
+        }
+
+        const ix = iqlabs.contract.createTableInstruction(
+            this.builder,
+            {
+                db_root: dbRoot,
+                receiver: new PublicKey(iqlabs.constants.DEFAULT_WRITE_FEE_RECEIVER),
+                signer: this.signer.publicKey,
+                table,
+                instruction_table: instructionTable,
+                system_program: SystemProgram.programId,
+            },
+            {
+                db_root_id: this.dbRootId,
+                table_seed: tableSeedBuf,
+                table_name: Buffer.from(trimmed, "utf8"),
+                column_names: DM_COLUMNS.map((name) => Buffer.from(name, "utf8")),
+                id_col: Buffer.from(DM_ID_COL, "utf8"),
+                ext_keys: [],
+                gate_mint_opt: null,
+                writers_opt: null,
+            },
+        );
+        const signature = await sendInstruction(this.connection, this.signer, ix);
+        return {table, instructionTable, created: true, signature};
+    }
+
+    async subscribeToAccount(account: PublicKey, options: { limit?: number } = {}) {
+        const limit =
+            typeof options.limit === "number" && options.limit > 0 ? options.limit : 10;
+        const seen = new Set<string>();
+        const latest = await iqlabs.reader.fetchAccountTransactions(account, {
+            limit,
+        });
+        for (const sig of latest) {
+            seen.add(sig.signature);
+        }
+
+        const subscriptionId = this.connection.onAccountChange(
+            account,
+            async () => {
+                const signatures = await iqlabs.reader.fetchAccountTransactions(account, {
+                    limit,
+                });
+                const fresh = signatures.filter((sig) => !seen.has(sig.signature));
+                if (fresh.length === 0) {
+                    return;
+                }
+                for (const sig of fresh.reverse()) {
+                    seen.add(sig.signature);
+                    const {data, metadata} = await iqlabs.reader.readCodeIn(
+                        sig.signature,
+                    );
+                    if (!data) {
+                        console.log({
+                            signature: sig.signature,
+                            metadata,
+                            data: null,
+                        });
+                        continue;
+                    }
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                            console.log({...parsed, __txSignature: sig.signature});
+                            continue;
+                        }
+                    } catch {
+                        // fallthrough
+                    }
+                    console.log({signature: sig.signature, metadata, data});
+                }
+            },
+            "confirmed",
+        );
+
+        return () => this.connection.removeAccountChangeListener(subscriptionId);
+    }
+
+    async joinRoom(roomSeed: Uint8Array, options: { limit?: number } = {}) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const table = iqlabs.contract.getTablePda(dbRoot, roomSeed, this.programId);
+        return this.subscribeToAccount(table, options);
+    }
+
+    async joinDm(dmSeed: Uint8Array, options: { limit?: number } = {}) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const connectionTable = iqlabs.contract.getConnectionTablePda(
+            dbRoot,
+            dmSeed,
+            this.programId,
+        );
+        return this.subscribeToAccount(connectionTable, options);
+    }
+
+    deriveRoomTable(roomSeed: Uint8Array) {
+        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
+        const table = iqlabs.contract.getTablePda(dbRoot, roomSeed, this.programId);
+        const instructionTable = iqlabs.contract.getInstructionTablePda(
+            dbRoot,
+            roomSeed,
+            this.programId,
+        );
+        return {table, instructionTable};
+    }
+}
