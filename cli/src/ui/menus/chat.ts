@@ -163,6 +163,8 @@ const runRoomChat = async (service: ChatService, room: any) => {
 
 const handleFriendSelect = async (service: ChatService, friend: any) => {
     if (friend.status === "pending") {
+        //TODO: this looks like when it approved, we join the chat, but we need to make manage friend list separate and allow user can block when it approved.
+        // this means, we need to make the list that displays only approved friend list and blocked, pending and make the suitable choice in there.
         const choice = (await prompt("1) Approve  2) Block  3) Back: ")).trim();
         if (choice === "1") {
             await service.manageConnection(
