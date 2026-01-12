@@ -1,5 +1,6 @@
 import readline from "node:readline";
 import iqlabs from "iqlabs-sdk/src";
+import {PublicKey} from "@solana/web3.js";
 
 import {ChatService} from "../../apps/chat/chat-service";
 import {logError, logInfo, logTable} from "../../utils/logger";
@@ -10,14 +11,12 @@ const showChatMenu = () => {
     console.log("          SolChat           ");
     console.log("============================\n");
     console.log("DM");
-    console.log("  1) See My Friend List"); // 친구목록을 읽으면서 상태를 옆이 표시하는데, 키보드 위아래로 움직여서 선택하면 pending 일 경우 manage connection, 아닐 경우 채팅하기로 들어가게 해준다. 그리고 그후에 차단까지
-    //채팅방을 들어가면 히스토리 보여주면서 구독하던거 있던거,  그거 틀어줌, chat service 에 잇음
+    console.log("  1) See My Friend List");
+    console.log("  2) Request connection");
     console.log("");
     console.log("Room");
-    console.log("  2) Join room ");
-    // 이거 하고나면 룸 리스트 보여주는거 보여준다. 킵보드로 움직여서 들어가면ㅁ chatservice 에 잇는 조인룸 ㄱㄱ
-    // 근데 join room 과 joindm에서  히스토리 불러오는 함수 써야할듯 첨에
-    console.log("  3) Create room (table)");
+    console.log("  3) Join room ");
+    console.log("  4) Create room (table)");
 
     console.log("");
     console.log("  9) Back");
@@ -137,7 +136,7 @@ const runDmChat = async (service: ChatService, friend: any) => {
 const runRoomChat = async (service: ChatService, room: any) => {
     console.clear();
     console.log(`[room] ${room.name}`);
-    const history = await service.fetchChatHistory(room.seed, {limit: 20});
+    const history = await iqlabs.reader.readTableRows(room.table, {limit: 20});
     if (history.length > 0) {
         logTable(history);
     } else {
@@ -216,6 +215,43 @@ const openFriendList = async (service: ChatService) => {
     await prompt("Press Enter to continue...");
 };
 
+const requestConnection = async (service: ChatService) => {
+    const input = (await prompt("Partner address: ")).trim();
+    if (!input) {
+        logError("Partner address is required");
+        return;
+    }
+    let partner: PublicKey;
+    try {
+        partner = new PublicKey(input);
+    } catch (err) {
+        logError("Invalid partner address", err);
+        await prompt("Press Enter to continue...");
+        return;
+    }
+    if (partner.equals(service.signer.publicKey)) {
+        logError("Cannot request connection with yourself");
+        await prompt("Press Enter to continue...");
+        return;
+    }
+
+    const result = await service.requestConnection(partner);
+    const seedHex = Buffer.from(result.connectionSeed).toString("hex");
+    if (result.created) {
+        logInfo("Connection requested", {
+            table: result.connectionTable.toBase58(),
+            seed: seedHex,
+            signature: result.signature ?? null,
+        });
+    } else {
+        logInfo("Connection already exists", {
+            table: result.connectionTable.toBase58(),
+            seed: seedHex,
+        });
+    }
+    await prompt("Press Enter to continue...");
+};
+
 const openRoomList = async (service: ChatService) => {
     const rooms = await service.listRooms();
     if (rooms.length === 0) {
@@ -278,9 +314,12 @@ export const runChatCommand = async () => {
                     await openFriendList(service);
                     break;
                 case "2":
-                    await openRoomList(service);
+                    await requestConnection(service);
                     break;
                 case "3":
+                    await openRoomList(service);
+                    break;
+                case "4":
                     await createRoom(service);
                     break;
                 case "9":

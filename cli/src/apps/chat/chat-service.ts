@@ -134,10 +134,8 @@ export class ChatService {
         return sendInstruction(this.connection, this.signer, ix);
     }
 
-    async requestConnection(
-        partner: PublicKey,
-        payload?: { handle?: string; intro?: string },
-    ) {
+    async requestConnection(partner: PublicKey) {
+
         const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
         const requester = this.signer.publicKey;
         const requesterBase58 = requester.toBase58();
@@ -172,13 +170,9 @@ export class ChatService {
         const requesterUser = iqlabs.contract.getUserPda(requester, this.programId);
         const receiverUser = iqlabs.contract.getUserPda(partner, this.programId);
 
-        const payloadBody: Record<string, string> = {dmTable: connectionTable.toBase58()};
-        if (payload?.handle) {
-            payloadBody.handle = payload.handle;
-        }
-        if (payload?.intro) {
-            payloadBody.intro = payload.intro;
-        }
+        const payloadBody: Record<string, string> = {
+            dmTable: connectionTable.toBase58(),
+        };
 
         const ix = iqlabs.contract.requestConnectionInstruction(
             this.builder,
@@ -275,36 +269,6 @@ export class ChatService {
             rowJson,
         );
     }
-
-    async fetchChatHistory(
-        roomSeed: Uint8Array,
-        options: { before?: string; limit?: number } = {},
-    ) {
-        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
-        const table = iqlabs.contract.getTablePda(dbRoot, roomSeed, this.programId);
-        const signatures = await iqlabs.reader.fetchAccountTransactions(table, options);
-        const rows: Array<Record<string, unknown>> = [];
-
-        for (const sig of signatures) {
-            const {data, metadata} = await iqlabs.reader.readCodeIn(sig.signature);
-            if (!data) {
-                rows.push({signature: sig.signature, metadata, data: null});
-                continue;
-            }
-            try {
-                const parsed = JSON.parse(data);
-                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                    rows.push({...parsed, __txSignature: sig.signature});
-                    continue;
-                }
-            } catch {
-                // fallthrough
-            }
-            rows.push({signature: sig.signature, metadata, data});
-        }
-        return rows;
-    }
-
     async fetchDmHistory(
         dmSeed: Uint8Array,
         options: { before?: string; limit?: number } = {},
@@ -315,30 +279,7 @@ export class ChatService {
             dmSeed,
             this.programId,
         );
-        const signatures = await iqlabs.reader.fetchAccountTransactions(
-            connectionTable,
-            options,
-        );
-        const rows: Array<Record<string, unknown>> = [];
-
-        for (const sig of signatures) {
-            const {data, metadata} = await iqlabs.reader.readCodeIn(sig.signature);
-            if (!data) {
-                rows.push({signature: sig.signature, metadata, data: null});
-                continue;
-            }
-            try {
-                const parsed = JSON.parse(data);
-                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                    rows.push({...parsed, __txSignature: sig.signature});
-                    continue;
-                }
-            } catch {
-                // fallthrough
-            }
-            rows.push({signature: sig.signature, metadata, data});
-        }
-        return rows;
+        return iqlabs.reader.readTableRows(connectionTable, options);
     }
 
     async listFriends() {
@@ -514,9 +455,21 @@ export class ChatService {
                 }
                 for (const sig of fresh.reverse()) {
                     seen.add(sig.signature);
-                    const {data, metadata} = await iqlabs.reader.readCodeIn(
-                        sig.signature,
-                    );
+                    let result: {data: string | null; metadata: string};
+                    try {
+                        result = await iqlabs.reader.readCodeIn(sig.signature);
+                    } catch (err) {
+                        if (
+                            err instanceof Error &&
+                            err.message.includes(
+                                "user_inventory_code_in instruction not found",
+                            )
+                        ) {
+                            continue;
+                        }
+                        throw err;
+                    }
+                    const {data, metadata} = result;
                     if (!data) {
                         console.log({
                             signature: sig.signature,

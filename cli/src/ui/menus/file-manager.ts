@@ -42,10 +42,11 @@ const actionCodeIn= async (input:string,filename="test.txt") => {
             logInfo(`Uploading... ${percent}%`);
         }
     };
+
     const signature = await iqlabs.writer.codeIn(
         {connection, signer},
         chunks,
-        false,
+        undefined,
         filename,
         0,
         filetype,
