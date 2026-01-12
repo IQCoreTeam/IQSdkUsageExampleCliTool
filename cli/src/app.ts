@@ -14,7 +14,8 @@ const showMainMenu = () => {
     console.log("  2) SolChat");
     console.log("  3) Exit");
     console.log("\n============================\n");
-    console.log(iqlabs.setRpcUrl(rpcUrl))
+    iqlabs.setRpcUrl(rpcUrl)
+    //TODO need to check if this actually working or its not working when constance is set.
 
 };
 
