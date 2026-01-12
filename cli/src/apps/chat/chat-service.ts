@@ -345,7 +345,7 @@ export class ChatService {
     }
 
     async listRooms() {
-        const list = await iqlabs.writer.getTablelistFromRoot(
+        const list = await iqlabs.reader.getTablelistFromRoot(
             this.connection,
             this.dbRootId,
         );
