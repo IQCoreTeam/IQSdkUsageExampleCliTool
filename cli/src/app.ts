@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import { runFileManager } from "./ui/menus/file-manager";
 import { runChatCommand } from "./ui/menus/chat";
-import { runPlaylistMenu } from "./ui/menus/playlist-menu";
+import { runGitMenu } from "./ui/menus/git-menu";
 import { prompt, closeReadline } from "./utils/prompt";
+import { runPlaylistMenu } from "./ui/menus/playlist-menu";
 import iqlabs from "iqlabs-sdk/src";
+
 const rpcUrl = process.env.SOLANA_RPC_ENDPOINT!;
 const clearScreen = () => console.clear();
 
@@ -14,7 +16,8 @@ const showMainMenu = () => {
     console.log("  1) File I/O (Write/Read)");
     console.log("  2) SolChat");
     console.log("  3) Semantic Playlist");
-    console.log("  4) Exit");
+    console.log("  4) Git on Chain");
+    console.log("  5) Exit");
     console.log("\n============================\n");
     iqlabs.setRpcUrl(rpcUrl)
     //TODO need to check if this actually working or its not working when constance is set.
@@ -45,6 +48,9 @@ const main = async () => {
                 await runPlaylistMenu();
                 break;
             case "4":
+                await runGitMenu();
+                break;
+            case "5":
                 running = false;
                 console.log("\nGoodbye!\n");
                 break;
