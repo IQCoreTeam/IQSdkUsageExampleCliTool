@@ -322,7 +322,7 @@ export class PlaylistService {
         let lastPercent = -1;
         const result = await iqlabs.reader.readCodeIn(
             audioTxId, 
-            "medium", 
+            "light", 
             (percent: number) => {
                 if (Math.floor(percent) > lastPercent) {
                     lastPercent = Math.floor(percent);
