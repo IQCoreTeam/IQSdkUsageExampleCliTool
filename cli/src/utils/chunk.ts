@@ -1,4 +1,4 @@
-export const DEFAULT_CHUNK_SIZE = 900;
+export const DEFAULT_CHUNK_SIZE = 850;
 
 export const chunkString = (
     value: string,
