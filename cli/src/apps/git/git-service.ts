@@ -86,6 +86,7 @@ export class GitService {
       "description",
       "owner",
       "timestamp",
+      "isPublic",
     ]);
 
     await this.ensureTable(GIT_CONSTANTS.COMMITS_TABLE, [

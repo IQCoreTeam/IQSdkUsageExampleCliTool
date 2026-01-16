@@ -42,7 +42,7 @@ export interface Fork {
 }
 
 export const GIT_CONSTANTS = {
-  REPOS_TABLE: "git_repos",
+  REPOS_TABLE: "git_repos_v2",
   COMMITS_TABLE: "git_commits",
   REFS_TABLE: "git_refs",
   COLLABORATORS_TABLE: "git_collabs",
