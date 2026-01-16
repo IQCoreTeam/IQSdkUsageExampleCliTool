@@ -8,6 +8,84 @@ import {prompt} from "../../utils/prompt";
 import {chunkString, DEFAULT_CHUNK_SIZE} from "../../utils/chunk";
 import {getWalletCtx} from "../../utils/wallet_manager";
 
+ // ui formatting helper for list all files. 1 -> 1 -> 3 inputs 
+ // lines 13 - 87  
+const MAX_METADATA_LENGTH = 120;
+const METADATA_SUMMARY_KEYS = new Set([
+    "filename",
+    "filetype",
+    "total_chunks",
+    "method",
+    "data",
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+const truncateValue = (value: string, maxLength: number): string => {
+    if (value.length <= maxLength) {
+        return value;
+    }
+    if (maxLength <= 3) {
+        return value.slice(0, maxLength);
+    }
+    return value.slice(0, maxLength - 3) + "...";
+};
+
+const summarizeMetadataRecord = (metadata: Record<string, unknown>): string => {
+    const parts: string[] = [];
+
+    if (metadata.filename !== undefined) {
+        parts.push(`filename=${String(metadata.filename)}`);
+    }
+    if (metadata.filetype !== undefined) {
+        parts.push(`type=${String(metadata.filetype)}`);
+    }
+    if (metadata.total_chunks !== undefined) {
+        parts.push(`chunks=${String(metadata.total_chunks)}`);
+    }
+    if (metadata.method !== undefined) {
+        parts.push(`method=${String(metadata.method)}`);
+    }
+
+    const extraKeys = Object.keys(metadata).filter((key) => !METADATA_SUMMARY_KEYS.has(key));
+    if (extraKeys.length > 0) {
+        parts.push(`extras=${extraKeys.join(",")}`);
+    }
+
+    if (parts.length === 0) {
+        const {data: _data, ...rest} = metadata;
+        return truncateValue(JSON.stringify(rest), MAX_METADATA_LENGTH);
+    }
+
+    return truncateValue(parts.join(" "), MAX_METADATA_LENGTH);
+};
+
+const summarizeMetadata = (metadata: unknown): string => {
+    if (metadata === null || metadata === undefined) {
+        return "";
+    }
+    if (typeof metadata === "string") {
+        const trimmed = metadata.trim();
+        if (!trimmed) {
+            return "";
+        }
+        try {
+            const parsed: unknown = JSON.parse(trimmed);
+            if (isRecord(parsed)) {
+                return summarizeMetadataRecord(parsed);
+            }
+            return truncateValue(String(parsed), MAX_METADATA_LENGTH);
+        } catch {
+            return truncateValue(trimmed, MAX_METADATA_LENGTH);
+        }
+    }
+    if (isRecord(metadata)) {
+        return summarizeMetadataRecord(metadata);
+    }
+    return truncateValue(String(metadata), MAX_METADATA_LENGTH);
+};
+
 const actionCodeIn= async (input:string,filename="test.txt") => {
     const {connection,signer} = getWalletCtx();
     logInfo("Chunking...");
@@ -171,7 +249,7 @@ const actionListAllFiles = async () => {
                     err: sig.err ? "error" : "ok",
                     memo: sig.memo ?? "",
                     onChainPath: sig.onChainPath ?? "",
-                    metadata: sig.metadata ?? "",
+                    metadata: summarizeMetadata(sig.metadata),
                 })),
             );
         }
