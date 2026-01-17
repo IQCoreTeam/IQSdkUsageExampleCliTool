@@ -317,12 +317,8 @@ export class PlaylistService {
 
         let lastPercent = -1;
         const result = await iqlabs.reader.readCodeIn(
-            audioTxId, 
-<<<<<<< HEAD
-            "light", 
-=======
+            audioTxId,
             "light",
->>>>>>> 0cbcc80 (update the connection pda for getting rootid)
             (percent: number) => {
                 if (Math.floor(percent) > lastPercent) {
                     lastPercent = Math.floor(percent);
