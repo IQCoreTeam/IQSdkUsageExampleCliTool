@@ -25,9 +25,21 @@ const DEFAULT_ROOT_ID = "playlist-v1";
 const SONGS_TABLE_NAME = "songs_v2";
 const RELATIONS_TABLE_NAME = "song_relations";
 
-
-
 const ID_COL = "id";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const sendInstruction = async (
     connection: Connection,
@@ -156,10 +168,7 @@ export class PlaylistService {
         if (sanitizedPath) {
              
              sanitizedPath = sanitizedPath.replace(/^"|"$/g, '').replace(/^'|'$/g, '');
-             
-             
              sanitizedPath = sanitizedPath.replace(/^\\\\wsl\.localhost\\Ubuntu/, "");
-             
              sanitizedPath = sanitizedPath.replace(/\\/g, "/");
         }
 
@@ -171,13 +180,10 @@ export class PlaylistService {
             console.log(`Found audio file at: ${sanitizedPath}`);
             console.log("Reading file...");
             const filename = path.basename(sanitizedPath);
-            
             const fileData = fs.readFileSync(sanitizedPath).toString("base64");
-            
-            
+
             const chunks = chunkString(fileData, DEFAULT_CHUNK_SIZE);
             console.log(`File read. Split into ${chunks.length} chunks. Starting upload...`);
-
             
             audioTxId = await iqlabs.writer.codeIn(
                 { connection: this.connection, signer: this.signer },
@@ -194,6 +200,7 @@ export class PlaylistService {
                      }
                 }
             );
+
             if (process.stdout.isTTY) process.stdout.write("\n");
             console.log(`Audio upload complete. TxId: ${audioTxId}`);
         } else if (filePath) {
@@ -211,11 +218,11 @@ export class PlaylistService {
             timestamp: Date.now(),
             audioTxId,
         };
+
         const rowJson = JSON.stringify(song);
         const tableSeed = sha256(SONGS_TABLE_NAME);
 
         console.log(`Writing song row to table (seed hash: ${tableSeed.toString('hex').slice(0, 8)}...)...`);
-        
         return iqlabs.writer.writeRow(
             this.connection,
             this.signer,
@@ -237,7 +244,6 @@ export class PlaylistService {
         };
         const rowJson = JSON.stringify(relation);
         const tableSeed = sha256(RELATIONS_TABLE_NAME);
-
         return iqlabs.writer.writeRow(
             this.connection,
             this.signer,
@@ -251,11 +257,7 @@ export class PlaylistService {
         const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
         const tableSeed = sha256(SONGS_TABLE_NAME);
         const table = iqlabs.contract.getTablePda(dbRoot, tableSeed, this.programId);
-        
-        
         const rows = await iqlabs.reader.readTableRows(table, { limit });
-
-        
         return rows as unknown as Song[];
     }
 
@@ -270,15 +272,11 @@ export class PlaylistService {
 
     
     async findPath(startSongId: string, endSongId: string): Promise<string[][]> {
-        const relations = await this.getRelationships(1000); 
-        
-        
+        const relations = await this.getRelationships(1000);
         const adj = new Map<string, string[]>();
         for (const r of relations) {
             if (!adj.has(r.fromId)) adj.set(r.fromId, []);
             adj.get(r.fromId)!.push(r.toId);
-            
-            
             if (r.type === RelationType.SIMILAR_TO) {
                  if (!adj.has(r.toId)) adj.set(r.toId, []);
                  adj.get(r.toId)!.push(r.fromId);
@@ -293,11 +291,9 @@ export class PlaylistService {
         while (queue.length > 0) {
             const path = queue.shift()!;
             const node = path[path.length - 1];
-
             if (node === endSongId) {
                 return [path]; 
             }
-
             const neighbors = adj.get(node) || [];
             for (const neighbor of neighbors) {
                 if (!visited.has(neighbor)) {
@@ -322,7 +318,11 @@ export class PlaylistService {
         let lastPercent = -1;
         const result = await iqlabs.reader.readCodeIn(
             audioTxId, 
+<<<<<<< HEAD
             "light", 
+=======
+            "light",
+>>>>>>> 0cbcc80 (update the connection pda for getting rootid)
             (percent: number) => {
                 if (Math.floor(percent) > lastPercent) {
                     lastPercent = Math.floor(percent);

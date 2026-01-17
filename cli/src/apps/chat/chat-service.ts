@@ -282,6 +282,7 @@ export class ChatService {
         return iqlabs.reader.readTableRows(connectionTable, options);
     }
 
+
     async listFriends() {
         const owner = this.signer.publicKey.toBase58();
         const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
@@ -326,6 +327,10 @@ export class ChatService {
                     ? rawTimestamp
                     : Number(rawTimestamp?.toString?.() ?? 0);
 
+            const dbRootId = decoded.db_root_id
+                ? Buffer.from(decoded.db_root_id).toString("utf8")
+                : "";
+
             friends.push({
                 address: friendAddress,
                 status,
@@ -337,6 +342,7 @@ export class ChatService {
                 partyA,
                 partyB,
                 lastTimestamp,
+                dbRootId,
             });
         }
 
