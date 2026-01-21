@@ -285,66 +285,34 @@ export class ChatService {
 
     async listFriends() {
         const owner = this.signer.publicKey.toBase58();
-        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
-        const accounts = await this.connection.getProgramAccounts(this.programId);
-        const friends = [] as any[];
+        const connections = await iqlabs.reader.fetchUserConnections(this.signer.publicKey, {
+            speed: "medium",
+        });
 
-        for (const {account, pubkey} of accounts) {
-            let decoded: any;
-            try {
-                decoded = this.accountCoder.decode("Connection", account.data);
-            } catch {
-                continue;
-            }
-            const partyA = new PublicKey(decoded.party_a).toBase58();
-            const partyB = new PublicKey(decoded.party_b).toBase58();
-            if (partyA !== owner && partyB !== owner) {
-                continue;
-            }
-            const seed = iqlabs.utils.deriveDmSeed(partyA, partyB);
-            const expected = iqlabs.contract.getConnectionTablePda(
-                dbRoot,
-                seed,
-                this.programId,
-            );
-            if (!expected.equals(pubkey)) {
-                continue;
-            }
-            const friendAddress = partyA === owner ? partyB : partyA;
-            const statusCode = decoded.status;
-            const status =
-                statusCode === iqlabs.contract.CONNECTION_STATUS_PENDING
-                    ? "pending"
-                    : statusCode === iqlabs.contract.CONNECTION_STATUS_APPROVED
-                        ? "approved"
-                        : statusCode === iqlabs.contract.CONNECTION_STATUS_BLOCKED
-                            ? "blocked"
-                            : "unknown";
-            const rawTimestamp =
-                decoded.last_timestamp ?? decoded.lastTimestamp ?? 0;
-            const lastTimestamp =
-                typeof rawTimestamp === "number"
-                    ? rawTimestamp
-                    : Number(rawTimestamp?.toString?.() ?? 0);
+        const friends = connections.map((conn) => {
+            const friendAddress = conn.partyA === owner ? conn.partyB : conn.partyA;
+            const seed = iqlabs.utils.deriveDmSeed(conn.partyA, conn.partyB);
+            const statusCode =
+                conn.status === "pending"
+                    ? iqlabs.contract.CONNECTION_STATUS_PENDING
+                    : conn.status === "approved"
+                        ? iqlabs.contract.CONNECTION_STATUS_APPROVED
+                        : iqlabs.contract.CONNECTION_STATUS_BLOCKED;
 
-            const dbRootId = decoded.db_root_id
-                ? Buffer.from(decoded.db_root_id).toString("utf8")
-                : "";
-
-            friends.push({
+            return {
                 address: friendAddress,
-                status,
+                status: conn.status,
                 statusCode,
-                requester: decoded.requester,
-                blocker: decoded.blocker,
+                requester: conn.requester === "a" ? 0 : 1,
+                blocker: conn.blocker === "a" ? 0 : conn.blocker === "b" ? 1 : 255,
                 seed,
-                table: pubkey,
-                partyA,
-                partyB,
-                lastTimestamp,
-                dbRootId,
-            });
-        }
+                table: new PublicKey(conn.connectionPda),
+                partyA: conn.partyA,
+                partyB: conn.partyB,
+                lastTimestamp: conn.timestamp ?? 0,
+                dbRootId: conn.dbRootId,
+            };
+        });
 
         friends.sort((a, b) => Number(b.lastTimestamp ?? 0) - Number(a.lastTimestamp ?? 0));
         return friends;
