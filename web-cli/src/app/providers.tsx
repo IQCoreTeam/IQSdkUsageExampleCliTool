@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT || 'https://api.devnet.solana.com';
+const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const wallets = useMemo(() => [], []);

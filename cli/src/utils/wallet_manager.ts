@@ -4,7 +4,7 @@ import os from "node:os";
 import { Connection, Keypair } from "@solana/web3.js";
 
 const DEFAULT_RPC_ENDPOINT =
-    process.env.SOLANA_RPC_ENDPOINT || "https://api.devnet.solana.com";
+    process.env.SOLANA_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com";
 
 // Check for local keypair.json first, then env var, then default solana cli keypair
 const resolveKeypairPath = (): string => {
