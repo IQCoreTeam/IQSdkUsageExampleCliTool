@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import * as sdk from 'iqlabs-sdk/src/sdk';
+import { iqlabs as sdk } from '@iqlabs-official/solana-sdk';
 
 type State =
   | 'main'

@@ -1,8 +1,8 @@
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { Idl } from "@coral-xyz/anchor";
 // @ts-ignore
-import iqlabs from "iqlabs-sdk/src";
-import codeInIdl from "iqlabs-sdk/idl/code_in.json";
+import { iqlabs } from "@iqlabs-official/solana-sdk";
+import codeInIdl from "@iqlabs-official/solana-sdk/idl/code_in.json";
 import { Repository, Commit, FileTree, Collaborator, GIT_CONSTANTS, Ref, PullRequest, UserProfile, Comment, FundingPool, Issue } from "./types";
 
 export interface Star {
@@ -45,7 +45,7 @@ export class GitChainService {
     rootIdStr: string;
     programId: PublicKey;
     builder: any;
-    
+
     // Cached hashed root ID
     private _dbRootId: Buffer | null = null;
 
@@ -77,22 +77,22 @@ export class GitChainService {
     }
 
     private get signer() {
-         if (!this.wallet.publicKey) throw new Error("Wallet not connected");
-         return {
-             publicKey: this.wallet.publicKey,
-             signTransaction: this.wallet.signTransaction.bind(this.wallet),
-             signAllTransactions: this.wallet.signAllTransactions.bind(this.wallet)
-         };
+        if (!this.wallet.publicKey) throw new Error("Wallet not connected");
+        return {
+            publicKey: this.wallet.publicKey,
+            signTransaction: this.wallet.signTransaction.bind(this.wallet),
+            signAllTransactions: this.wallet.signAllTransactions.bind(this.wallet)
+        };
     }
 
     private async sendInstruction(instruction: TransactionInstruction) {
         if (!this.wallet.publicKey || !this.wallet.signTransaction) throw new Error("Wallet not connected");
-        
+
         const tx = new Transaction().add(instruction);
         const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash;
         tx.feePayer = this.wallet.publicKey;
-        
+
         const signed = await this.wallet.signTransaction(tx);
         const signature = await this.connection.sendRawTransaction(signed.serialize());
         await this.connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight });
@@ -103,7 +103,7 @@ export class GitChainService {
         const dbRootId = await this.getDbRootId();
         const dbRoot = iqlabs.contract.getDbRootPda(dbRootId, this.programId);
         const rootInfo = await this.connection.getAccountInfo(dbRoot);
-        
+
         if (!rootInfo) {
             console.log("Initializing Git DB Root...");
             if (!this.wallet.publicKey) throw new Error("Wallet required to init DB");
@@ -148,7 +148,7 @@ export class GitChainService {
             "userAddress",
             "role",
         ]);
-        
+
         await this.ensureTable(EXTENDED_CONSTANTS.FORKS_TABLE, [
             "originalRepoName",
             "forkRepoName",
@@ -276,9 +276,9 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(GIT_CONSTANTS.REPOS_TABLE);
-        
+
         console.log(`Creating ${isPublic ? "public" : "private"} repo '${name}'...`);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -312,7 +312,7 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(GIT_CONSTANTS.REPOS_TABLE);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -324,35 +324,35 @@ export class GitChainService {
         // 3. Clone the HEAD state
         const branches = await this.listBranches(originalRepoName);
         const mainBranch = branches.find(b => b.refName === "main");
-        
+
         if (mainBranch && mainBranch.commitId) {
-             const oldLog = await this.getLog(originalRepoName);
-             const headCommit = oldLog.find(c => c.id === mainBranch.commitId);
-             
-             if (headCommit) {
-                 // Create commit manually to skip file processing and reuse tree
-                 const forkCommit: Commit = {
-                     id: crypto.randomUUID(),
-                     repoName: targetName,
-                     message: "Fork initialization",
-                     author: myAddr,
-                     timestamp: Date.now(),
-                     treeTxId: headCommit.treeTxId,
-                     parentCommitId: undefined
-                 };
-                 
-                 const commitTableSeed = await this.sha256(GIT_CONSTANTS.COMMITS_TABLE);
-                 await iqlabs.writer.writeRow(
-                     this.connection,
-                     this.signer as any,
-                     dbRootId,
-                     commitTableSeed,
-                     JSON.stringify(forkCommit)
-                 );
-                 console.log("Fork initialized with upstream state.");
-             }
+            const oldLog = await this.getLog(originalRepoName);
+            const headCommit = oldLog.find(c => c.id === mainBranch.commitId);
+
+            if (headCommit) {
+                // Create commit manually to skip file processing and reuse tree
+                const forkCommit: Commit = {
+                    id: crypto.randomUUID(),
+                    repoName: targetName,
+                    message: "Fork initialization",
+                    author: myAddr,
+                    timestamp: Date.now(),
+                    treeTxId: headCommit.treeTxId,
+                    parentCommitId: undefined
+                };
+
+                const commitTableSeed = await this.sha256(GIT_CONSTANTS.COMMITS_TABLE);
+                await iqlabs.writer.writeRow(
+                    this.connection,
+                    this.signer as any,
+                    dbRootId,
+                    commitTableSeed,
+                    JSON.stringify(forkCommit)
+                );
+                console.log("Fork initialized with upstream state.");
+            }
         }
-        
+
         // 4. Record Fork Metadata
         const forkMeta = {
             originalRepoName,
@@ -361,11 +361,11 @@ export class GitChainService {
         };
         const forkTableSeed = await this.sha256(EXTENDED_CONSTANTS.FORKS_TABLE);
         await iqlabs.writer.writeRow(
-             this.connection,
-             this.signer as any,
-             dbRootId,
-             forkTableSeed,
-             JSON.stringify(forkMeta)
+            this.connection,
+            this.signer as any,
+            dbRootId,
+            forkTableSeed,
+            JSON.stringify(forkMeta)
         );
 
         console.log("Fork complete!");
@@ -392,7 +392,7 @@ export class GitChainService {
     // L1 Cache (Memory)
     private fileCache = new Map<string, string>();
     private treeCache = new Map<string, FileTree>();
-    
+
     // L2 Cache (IndexedDB)
     private dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -488,77 +488,77 @@ export class GitChainService {
     }
 
     async getFile(txId: string): Promise<string | null> {
-         // L1
-         if (this.fileCache.has(txId)) {
-             return this.fileCache.get(txId)!;
-         }
+        // L1
+        if (this.fileCache.has(txId)) {
+            return this.fileCache.get(txId)!;
+        }
 
-         // L2
-         const cached = await this.getFromDb("files", txId);
-         if (cached) {
-             this.fileCache.set(txId, cached);
-             return cached;
-         }
+        // L2
+        const cached = await this.getFromDb("files", txId);
+        if (cached) {
+            this.fileCache.set(txId, cached);
+            return cached;
+        }
 
-         try {
-             // Fallback to legacy read for basic support or internal usage
-             const fileRes = await iqlabs.reader.readCodeIn(txId);
-             if (fileRes.data) {
-                 const content = atob(fileRes.data);
-                 this.fileCache.set(txId, content);
-                 this.putToDb("files", txId, content);
-                 return content;
-             }
-             return null;
-         } catch (e) {
-             console.error("Failed to fetch file", e);
-             return null;
-         }
+        try {
+            // Fallback to legacy read for basic support or internal usage
+            const fileRes = await iqlabs.reader.readCodeIn(txId);
+            if (fileRes.data) {
+                const content = atob(fileRes.data);
+                this.fileCache.set(txId, content);
+                this.putToDb("files", txId, content);
+                return content;
+            }
+            return null;
+        } catch (e) {
+            console.error("Failed to fetch file", e);
+            return null;
+        }
     }
 
     async getFileContent(txId: string, repoName?: string, isPrivate = false): Promise<string> {
-         // Create cache key that includes encryption context
-         const cacheKey = isPrivate && repoName ? `${txId}:${repoName}:private` : txId;
-         
-         // L1 - Memory cache
-         if (this.fileCache.has(cacheKey)) {
-             return this.fileCache.get(cacheKey)!;
-         }
+        // Create cache key that includes encryption context
+        const cacheKey = isPrivate && repoName ? `${txId}:${repoName}:private` : txId;
 
-         // L2 - IndexedDB cache
-         const cached = await this.getFromDb("files", cacheKey);
-         if (cached) {
-             this.fileCache.set(cacheKey, cached);
-             return cached;
-         }
+        // L1 - Memory cache
+        if (this.fileCache.has(cacheKey)) {
+            return this.fileCache.get(cacheKey)!;
+        }
 
-         try {
-             const fileRes = await iqlabs.reader.readCodeIn(txId);
-             
-             let content = "";
-             if (fileRes.data) {
-                 // In some versions readCodeIn returns base64 string directly
-                 content = Buffer.from(fileRes.data, "base64").toString("utf-8");
-             }
-             
-             if (repoName && isPrivate) {
-                 try {
-                     const key = await this.getEncryptionKey(repoName);
-                     content = this.decrypt(content, key);
-                 } catch {
-                     return "[DECRYPTION_ERROR_ACCESS_DENIED]";
-                 }
-             }
+        // L2 - IndexedDB cache
+        const cached = await this.getFromDb("files", cacheKey);
+        if (cached) {
+            this.fileCache.set(cacheKey, cached);
+            return cached;
+        }
 
-             // Cache the result
-             this.fileCache.set(cacheKey, content);
-             this.putToDb("files", cacheKey, content);
+        try {
+            const fileRes = await iqlabs.reader.readCodeIn(txId);
 
-             return content;
-         } catch(e) {
-             console.error("Failed to read file", e);
-             return "";
-         }
+            let content = "";
+            if (fileRes.data) {
+                // In some versions readCodeIn returns base64 string directly
+                content = Buffer.from(fileRes.data, "base64").toString("utf-8");
+            }
+
+            if (repoName && isPrivate) {
+                try {
+                    const key = await this.getEncryptionKey(repoName);
+                    content = this.decrypt(content, key);
+                } catch {
+                    return "[DECRYPTION_ERROR_ACCESS_DENIED]";
+                }
+            }
+
+            // Cache the result
+            this.fileCache.set(cacheKey, content);
+            this.putToDb("files", cacheKey, content);
+
+            return content;
+        } catch (e) {
+            console.error("Failed to read file", e);
+            return "";
+        }
     }
 
     async listBranches(repoName: string): Promise<Ref[]> {
@@ -574,7 +574,7 @@ export class GitChainService {
         try {
             const rows = await iqlabs.reader.readTableRows(table);
             const allRefs = rows as unknown as Ref[];
-            
+
             // Deduplicate: Keep latest (last) occurrence of each refName
             const refMap = new Map<string, Ref>();
             allRefs.forEach(r => {
@@ -582,7 +582,7 @@ export class GitChainService {
                     refMap.set(r.refName, r); // Overwrites previous, effectively keeping the latest
                 }
             });
-            
+
             return Array.from(refMap.values());
         } catch {
             return [];
@@ -609,16 +609,16 @@ export class GitChainService {
     async addCollaborator(repoName: string, userAddress: string) {
         // Basic owner check should be done in UI or here if wallet avail
         if (this.wallet.publicKey) {
-             const repos = await this.listRepos();
-             const repo = repos.find(r => r.name === repoName);
-             if (repo && repo.owner !== this.wallet.publicKey.toBase58()) {
-                 throw new Error("Only owner can add collaborators");
-             }
+            const repos = await this.listRepos();
+            const repo = repos.find(r => r.name === repoName);
+            if (repo && repo.owner !== this.wallet.publicKey.toBase58()) {
+                throw new Error("Only owner can add collaborators");
+            }
         }
 
         await this.ensureInfrastructure();
         console.log(`Adding ${userAddress} to '${repoName}'...`);
-        
+
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(GIT_CONSTANTS.COLLABORATORS_TABLE);
 
@@ -653,12 +653,12 @@ export class GitChainService {
     // Encryption Helpers
     private async getEncryptionKey(repoName: string): Promise<string> {
         if (!this.wallet.publicKey || !this.wallet.signTransaction) throw new Error("Wallet not connected");
-        
+
         // In a real app, uses wallet signature to derive a deterministic key
         // For this demo, we'll use a simplified derivation based on the user's public key + repo name
         // SECURITY WARNING: This is a demo implementation. In production, use `signMessage` to derive a secret.
         const seed = `SOLGIT_SECRET_${this.wallet.publicKey.toBase58()}_${repoName}`;
-        return seed; 
+        return seed;
     }
 
     private encrypt(content: string, key: string): string {
@@ -676,125 +676,125 @@ export class GitChainService {
     }
 
     async commit(repoName: string, message: string, files: { path: string, content: string }[], isPrivate = false) {
-         await this.ensureInfrastructure();
-         console.log(`Committing ${files.length} changed files to '${repoName}'...`);
+        await this.ensureInfrastructure();
+        console.log(`Committing ${files.length} changed files to '${repoName}'...`);
 
-         let encryptionKey = "";
-         if (isPrivate) {
-             encryptionKey = await this.getEncryptionKey(repoName);
-             console.log("🔒 Encrypting files for private repo...");
-         }
+        let encryptionKey = "";
+        if (isPrivate) {
+            encryptionKey = await this.getEncryptionKey(repoName);
+            console.log("🔒 Encrypting files for private repo...");
+        }
 
-         // 1. Get previous state
-         let oldTree: FileTree = {};
-         const logs = await this.getLog(repoName);
-         if (logs.length > 0) {
-             const latest = logs[0];
-             try {
-                 oldTree = await this.getTree(latest.treeTxId);
-             } catch (e) {
-                 console.warn("Could not load previous tree, starting fresh.");
-             }
-         }
+        // 1. Get previous state
+        let oldTree: FileTree = {};
+        const logs = await this.getLog(repoName);
+        if (logs.length > 0) {
+            const latest = logs[0];
+            try {
+                oldTree = await this.getTree(latest.treeTxId);
+            } catch (e) {
+                console.warn("Could not load previous tree, starting fresh.");
+            }
+        }
 
-         const fileTree: FileTree = { ...oldTree };
-         
-         const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+        const fileTree: FileTree = { ...oldTree };
 
-         // 2. Process changes
-         let uploadedCount = 0;
-         
-         for (const f of files) {
-             // 1. Encrypt if needed
-             let finalContent = f.content;
-             if (isPrivate) {
-                 finalContent = this.encrypt(f.content, encryptionKey);
-             }
+        const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-             // In browser, content is string. Encode to Base64 for hash and storage.
-             const contentB64 = Buffer.from(finalContent).toString("base64");
-             const hash = await this.sha256(contentB64).then(b => b.toString("hex"));
+        // 2. Process changes
+        let uploadedCount = 0;
 
-             if (fileTree[f.path] && fileTree[f.path].hash === hash) {
-                 console.log(`Unchanged: ${f.path}`);
-                 continue;
-             }
+        for (const f of files) {
+            // 1. Encrypt if needed
+            let finalContent = f.content;
+            if (isPrivate) {
+                finalContent = this.encrypt(f.content, encryptionKey);
+            }
 
-             console.log(`Uploading ${f.path}...`);
-             const chunks = chunkString(contentB64, DEFAULT_CHUNK_SIZE);
-             if (chunks.length === 0) chunks.push("");
+            // In browser, content is string. Encode to Base64 for hash and storage.
+            const contentB64 = Buffer.from(finalContent).toString("base64");
+            const hash = await this.sha256(contentB64).then(b => b.toString("hex"));
 
-             let success = false;
-             let retries = 3;
+            if (fileTree[f.path] && fileTree[f.path].hash === hash) {
+                console.log(`Unchanged: ${f.path}`);
+                continue;
+            }
 
-             while (retries > 0 && !success) {
-                 try {
-                     const txId: string = await iqlabs.writer.codeIn(
-                         { connection: this.connection, signer: this.signer as any },
-                         chunks,
-                         undefined, // default mode
-                         f.path.split('/').pop() || "file", // filename
-                         0, // method
-                         "application/octet-stream",
-                         // @ts-ignore
-                         (p: number) => {}
-                     );
+            console.log(`Uploading ${f.path}...`);
+            const chunks = chunkString(contentB64, DEFAULT_CHUNK_SIZE);
+            if (chunks.length === 0) chunks.push("");
 
-                     fileTree[f.path] = {
-                         txId,
-                         hash,
-                     };
-                     success = true;
-                     uploadedCount++;
-                 } catch (e: any) {
-                     console.warn(`Retry (${retries}): ${e.message}`);
-                     retries--;
-                     if (retries === 0) throw new Error(`Failed to upload ${f.path}`);
-                     await delay(2000);
-                 }
-             }
-             await delay(500);
-         }
+            let success = false;
+            let retries = 3;
 
-         if (uploadedCount === 0 && files.length > 0 && logs.length > 0) {
-              console.log("No actual changes detected (hashes match).");
-         }
+            while (retries > 0 && !success) {
+                try {
+                    const txId: string = await iqlabs.writer.codeIn(
+                        { connection: this.connection, signer: this.signer as any },
+                        chunks,
+                        undefined, // default mode
+                        f.path.split('/').pop() || "file", // filename
+                        0, // method
+                        "application/octet-stream",
+                        // @ts-ignore
+                        (p: number) => { }
+                    );
 
-         // 3. Upload File Tree
-         console.log("Uploading File Tree Manifest...");
-         const treeJson = JSON.stringify(fileTree);
-         const treeChunks = chunkString(treeJson, DEFAULT_CHUNK_SIZE);
-         const treeTxId = await iqlabs.writer.codeIn(
-             { connection: this.connection, signer: this.signer as any },
-             treeChunks,
-             undefined,
-             "tree.json",
-             0,
-             "application/json"
-         );
- 
-         // 4. Record Commit
-         const commit: Commit = {
-             id: crypto.randomUUID(),
-             repoName,
-             message,
-             author: this.wallet.publicKey!.toBase58(),
-             timestamp: Date.now(),
-             treeTxId,
-             parentCommitId: logs.length > 0 ? logs[0].id : undefined
-         };
-         
-         const dbRootId = await this.getDbRootId();
-         const tableSeed = await this.sha256(GIT_CONSTANTS.COMMITS_TABLE);
- 
-         await iqlabs.writer.writeRow(
-             this.connection,
-             this.signer as any,
-             dbRootId,
-             tableSeed,
-             JSON.stringify(commit)
-         );
-         console.log(`Commit successful! ID: ${commit.id}`);
+                    fileTree[f.path] = {
+                        txId,
+                        hash,
+                    };
+                    success = true;
+                    uploadedCount++;
+                } catch (e: any) {
+                    console.warn(`Retry (${retries}): ${e.message}`);
+                    retries--;
+                    if (retries === 0) throw new Error(`Failed to upload ${f.path}`);
+                    await delay(2000);
+                }
+            }
+            await delay(500);
+        }
+
+        if (uploadedCount === 0 && files.length > 0 && logs.length > 0) {
+            console.log("No actual changes detected (hashes match).");
+        }
+
+        // 3. Upload File Tree
+        console.log("Uploading File Tree Manifest...");
+        const treeJson = JSON.stringify(fileTree);
+        const treeChunks = chunkString(treeJson, DEFAULT_CHUNK_SIZE);
+        const treeTxId = await iqlabs.writer.codeIn(
+            { connection: this.connection, signer: this.signer as any },
+            treeChunks,
+            undefined,
+            "tree.json",
+            0,
+            "application/json"
+        );
+
+        // 4. Record Commit
+        const commit: Commit = {
+            id: crypto.randomUUID(),
+            repoName,
+            message,
+            author: this.wallet.publicKey!.toBase58(),
+            timestamp: Date.now(),
+            treeTxId,
+            parentCommitId: logs.length > 0 ? logs[0].id : undefined
+        };
+
+        const dbRootId = await this.getDbRootId();
+        const tableSeed = await this.sha256(GIT_CONSTANTS.COMMITS_TABLE);
+
+        await iqlabs.writer.writeRow(
+            this.connection,
+            this.signer as any,
+            dbRootId,
+            tableSeed,
+            JSON.stringify(commit)
+        );
+        console.log(`Commit successful! ID: ${commit.id}`);
     }
 
 
@@ -817,7 +817,7 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(EXTENDED_CONSTANTS.ISSUES_TABLE);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -838,7 +838,7 @@ export class GitChainService {
             const rows = await iqlabs.reader.readTableRows(table);
             return (rows as unknown as Issue[])
                 .filter(i => i.repoName === repoName)
-                .sort((a,b) => b.timestamp - a.timestamp);
+                .sort((a, b) => b.timestamp - a.timestamp);
         } catch {
             return [];
         }
@@ -859,7 +859,7 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(EXTENDED_CONSTANTS.COMMENTS_TABLE);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -880,8 +880,8 @@ export class GitChainService {
             const rows = await iqlabs.reader.readTableRows(table);
             return (rows as unknown as Comment[])
                 .filter(c => c.repoName === repoName && c.targetId === targetId)
-                .sort((a,b) => a.timestamp - b.timestamp); // Oldest first
-        } catch(e) {
+                .sort((a, b) => a.timestamp - b.timestamp); // Oldest first
+        } catch (e) {
             console.error("Failed to fetch comments", e);
             return [];
         }
@@ -899,7 +899,7 @@ export class GitChainService {
         const tableSeed = await this.sha256(EXTENDED_CONSTANTS.STARS_TABLE);
 
         if (alreadyStarred) {
-             console.log("Already starred!");
+            console.log("Already starred!");
         } else {
             await iqlabs.writer.writeRow(
                 this.connection,
@@ -1042,7 +1042,7 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(GIT_CONSTANTS.PULL_REQUESTS_TABLE);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -1062,7 +1062,7 @@ export class GitChainService {
         try {
             const rows = await iqlabs.reader.readTableRows(table);
             const allPrs = rows as unknown as PullRequest[];
-            
+
             // Deduplicate by ID, keeping the one with latest timestamp
             const latestMap = new Map<string, PullRequest>();
             allPrs.forEach(pr => {
@@ -1076,7 +1076,7 @@ export class GitChainService {
             });
 
             return Array.from(latestMap.values())
-                       .sort((a, b) => b.timestamp - a.timestamp);
+                .sort((a, b) => b.timestamp - a.timestamp);
         } catch {
             return [];
         }
@@ -1084,7 +1084,7 @@ export class GitChainService {
 
     async mergePullRequest(pr: PullRequest) {
         if (!this.wallet.publicKey) throw new Error("Wallet not connected");
-        
+
         // 1. Update PR status
         const updatedPr: PullRequest = {
             ...pr,
@@ -1094,7 +1094,7 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const prTableSeed = await this.sha256(GIT_CONSTANTS.PULL_REQUESTS_TABLE);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -1107,44 +1107,44 @@ export class GitChainService {
         // Find commit of source branch
         const branches = await this.listBranches(pr.repoName);
         const sourceRef = branches.find(b => b.refName === pr.sourceBranch);
-        
+
         if (sourceRef && sourceRef.commitId) {
             await this.createBranch(pr.repoName, pr.targetBranch, sourceRef.commitId);
             console.log(`Merged ${pr.sourceBranch} into ${pr.targetBranch}`);
-            
+
             // 3. Check for Bounty (Simple Logic: Look for "Fixes #ISSUE_ID" in PR description)
             const issueMatch = pr.description.match(/Fixes #([a-f0-9-]+)/);
             if (issueMatch) {
-               const issueId = issueMatch[1];
-               const issues = await this.getIssues(pr.repoName);
-               const relatedIssue = issues.find(i => i.id.startsWith(issueId)); // Allow partial ID match if UUID is long
-               
-               if (relatedIssue && relatedIssue.bounty && relatedIssue.bountyStatus === 'active') {
-                   console.log(`Found bounty of ${relatedIssue.bounty} SOL on issue ${relatedIssue.id}`);
-                   // Attempt transfer
-                   try {
-                       await this.sendTip(pr.author, relatedIssue.bounty);
-                       
-                       // Mark issue as paid/closed
-                       const issueTableSeed = await this.sha256(EXTENDED_CONSTANTS.ISSUES_TABLE);
-                       const updatedIssue: Issue = {
-                           ...relatedIssue,
-                           status: 'closed',
-                           bountyStatus: 'paid'
-                       };
-                       await iqlabs.writer.writeRow(
+                const issueId = issueMatch[1];
+                const issues = await this.getIssues(pr.repoName);
+                const relatedIssue = issues.find(i => i.id.startsWith(issueId)); // Allow partial ID match if UUID is long
+
+                if (relatedIssue && relatedIssue.bounty && relatedIssue.bountyStatus === 'active') {
+                    console.log(`Found bounty of ${relatedIssue.bounty} SOL on issue ${relatedIssue.id}`);
+                    // Attempt transfer
+                    try {
+                        await this.sendTip(pr.author, relatedIssue.bounty);
+
+                        // Mark issue as paid/closed
+                        const issueTableSeed = await this.sha256(EXTENDED_CONSTANTS.ISSUES_TABLE);
+                        const updatedIssue: Issue = {
+                            ...relatedIssue,
+                            status: 'closed',
+                            bountyStatus: 'paid'
+                        };
+                        await iqlabs.writer.writeRow(
                             this.connection,
                             this.signer as any,
                             dbRootId,
                             issueTableSeed,
                             JSON.stringify(updatedIssue)
-                       );
-                       console.log("Bounty paid and issue closed.");
-                   } catch (e) {
-                       console.error("Failed to pay bounty:", e);
-                       // Don't fail the whole merge just because payment didn't go through (e.g. insufficient funds)
-                   }
-               }
+                        );
+                        console.log("Bounty paid and issue closed.");
+                    } catch (e) {
+                        console.error("Failed to pay bounty:", e);
+                        // Don't fail the whole merge just because payment didn't go through (e.g. insufficient funds)
+                    }
+                }
             }
         } else {
             console.warn("Source branch commit not found, could not fast-forward.");
@@ -1165,17 +1165,17 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(GIT_CONSTANTS.PROFILES_TABLE);
-        
+
         // Profiles are keyed by userAddress (which is unique)
         // Since writeRow appends, we should strictly just write latest.
         // Reading logic will take the latest entry for a userAddress.
-        
+
         // Note: For 'socials' object we need to stringify it twice? 
         // No, `writeRow` takes a JSON string of the whole row. 
         // The column definition for 'socials' expects a string if it's not a primitive.
         // Actually, our current schema is loose. We'll store the whole object in the row JSON.
         // When reading back, we just parse the row.
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -1198,7 +1198,7 @@ export class GitChainService {
             const updates = (rows as unknown as UserProfile[])
                 .filter(p => p.userAddress === userAddress)
                 .sort((a, b) => b.timestamp - a.timestamp);
-            
+
             return updates.length > 0 ? updates[0] : null;
         } catch {
             return null;
@@ -1256,7 +1256,7 @@ export class GitChainService {
 
         const dbRootId = await this.getDbRootId();
         const tableSeed = await this.sha256(EXTENDED_CONSTANTS.QF_POOL_TABLE);
-        
+
         await iqlabs.writer.writeRow(
             this.connection,
             this.signer as any,
@@ -1268,7 +1268,7 @@ export class GitChainService {
     }
     async sendTip(recipient: string, amountSol: number) {
         if (!this.wallet.publicKey) throw new Error("Wallet not connected");
-        
+
         const ix = SystemProgram.transfer({
             fromPubkey: this.wallet.publicKey,
             toPubkey: new PublicKey(recipient),

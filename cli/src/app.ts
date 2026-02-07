@@ -4,7 +4,7 @@ import { runChatCommand } from "./ui/menus/chat";
 import { runGitMenu } from "./ui/menus/git-menu";
 import { prompt, closeReadline } from "./utils/prompt";
 import { runPlaylistMenu } from "./ui/menus/playlist-menu";
-import iqlabs from "iqlabs-sdk/src";
+import { iqlabs } from "@iqlabs-official/solana-sdk";
 
 const rpcUrl = process.env.SOLANA_RPC_ENDPOINT!;
 const clearScreen = () => console.clear();
