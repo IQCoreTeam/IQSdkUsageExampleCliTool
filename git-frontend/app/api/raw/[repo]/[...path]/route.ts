@@ -6,7 +6,12 @@ import { Repository, Commit, FileTree } from "@/services/git/types";
 
 // We need a connection instance on the server side
 // Note: In a real app we might use a dedicated RPC endpoint env var
-const connection = new Connection(clusterApiUrl("mainnet-beta"));
+// @ts-ignore
+import { iqlabs } from "@iqlabs-official/solana-sdk";
+
+const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl((process.env.NEXT_PUBLIC_SOLANA_NETWORK as any) || "devnet");
+const connection = new Connection(endpoint);
+iqlabs.setRpcUrl(endpoint);
 
 // We need a read-only wallet adapter dummy since we are just reading
 const dummyWallet = {
@@ -75,6 +80,8 @@ export async function GET(
     const { repo: repoName, path } = await context.params;
     const filePath = path.join("/");
 
+    console.log(`[Raw API] Requesting: ${repoName}/${filePath}`);
+
     try {
         const gitService = new GitChainService(connection, dummyWallet);
 
@@ -88,6 +95,7 @@ export async function GET(
         const repository = repos.find(r => r.name === repoName);
 
         if (!repository) {
+            console.error(`[Raw API] Repository not found: ${repoName}`);
             return new NextResponse("Repository not found", { status: 404 });
         }
 
@@ -99,10 +107,12 @@ export async function GET(
         }
 
         if (logs.length === 0) {
+            console.error(`[Raw API] Repository empty: ${repoName}`);
             return new NextResponse("Repository is empty", { status: 404 });
         }
 
         const latestCommit = logs[0];
+        console.log(`[Raw API] Latest commit: ${latestCommit.id}, Tree: ${latestCommit.treeTxId}`);
 
         // 3. Get Tree (with caching - trees are immutable!)
         let tree = treeCache.get(latestCommit.treeTxId);
@@ -112,10 +122,19 @@ export async function GET(
         }
 
         // 4. Find file
-        const fileNode = tree[filePath];
+        // Support for "folder/" -> "folder/index.html" could be added here
+        let targetPath = filePath;
+        let fileNode = tree[targetPath];
 
-        if (!fileNode || !fileNode.txId) {
-            return new NextResponse(`File not found: ${filePath}`, { status: 404 });
+        if (!fileNode) {
+            // Try index.html if it's a directory-like request (though path usually includes filename)
+            // or if exact match failed
+            console.warn(`[Raw API] File not found at ${targetPath}. Tree keys: ${Object.keys(tree).join(', ')}`);
+            return new NextResponse(`File not found: ${targetPath}`, { status: 404 });
+        }
+
+        if (!fileNode.txId) {
+            return new NextResponse(`Invalid file node for: ${targetPath}`, { status: 500 });
         }
 
         // 5. Check public/private
@@ -126,12 +145,21 @@ export async function GET(
         // 6. Get File Content (with caching - files are immutable!)
         let content = fileCache.get(fileNode.txId);
         if (!content) {
+            console.log(`[Raw API] Fetching content from chain: ${fileNode.txId}`);
             content = await gitService.getFileContent(fileNode.txId);
+            // Verify content is valid string
+            if (typeof content !== 'string') {
+                console.warn(`[Raw API] Content was not a string: ${typeof content}`);
+                content = String(content);
+            }
+            if (!content) {
+                console.warn(`[Raw API] Content empty for ${fileNode.txId}`);
+            }
             fileCache.set(fileNode.txId, content);
         }
 
         // 7. Determine MIME type
-        const ext = filePath.split('.').pop()?.toLowerCase();
+        const ext = targetPath.split('.').pop()?.toLowerCase();
         let contentType = "text/plain";
         if (ext === "html") contentType = "text/html";
         else if (ext === "js") contentType = "application/javascript";
@@ -154,7 +182,7 @@ export async function GET(
         });
 
     } catch (e: any) {
-        console.error(e);
+        console.error("[Raw API] Error:", e);
         return new NextResponse("Internal Server Error: " + e.message, { status: 500 });
     }
 }
