@@ -32,6 +32,7 @@ if (typeof window !== 'undefined') {
 
 const IDL = codeInIdl as unknown as Idl;
 const DEFAULT_ROOT_ID = "iq-git-v1";
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:3000";
 
 export interface WalletAdapter {
     publicKey: PublicKey | null;
@@ -533,6 +534,24 @@ export class GitChainService {
         }
 
         try {
+            
+            if (GATEWAY_URL && !repoName) { 
+                try {
+                    const res = await fetch(`${GATEWAY_URL}/img/${txId}`);
+                    if (res.ok) {
+                    
+                        const content = await res.text();
+
+                    
+                        this.fileCache.set(cacheKey, content);
+                        this.putToDb("files", cacheKey, content);
+                        return content;
+                    }
+                } catch (gwError) {
+                    console.warn("Gateway fetch failed, falling back to SDK", gwError);
+                }
+            }
+
             const fileRes = await iqlabs.reader.readCodeIn(txId);
 
             let content = "";
