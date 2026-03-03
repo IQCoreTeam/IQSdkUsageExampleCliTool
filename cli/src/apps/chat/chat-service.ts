@@ -116,22 +116,12 @@ export class ChatService {
     }
 
     async updateUserMetadata(metadataTxId: string) {
-        const dbRoot = iqlabs.contract.getDbRootPda(this.dbRootId, this.programId);
-        const userState = iqlabs.contract.getUserPda(this.signer.publicKey, this.programId);
-        const ix = iqlabs.contract.updateUserMetadataInstruction(
-            this.builder,
-            {
-                user: userState,
-                db_root: dbRoot,
-                signer: this.signer.publicKey,
-                system_program: SystemProgram.programId,
-            },
-            {
-                db_root_id: this.dbRootId,
-                meta: Buffer.from(metadataTxId, "utf8"),
-            },
+        return iqlabs.writer.updateUserMetadata(
+            this.connection,
+            this.signer,
+            this.dbRootId,
+            metadataTxId,
         );
-        return sendInstruction(this.connection, this.signer, ix);
     }
 
     async requestConnection(partner: PublicKey) {
