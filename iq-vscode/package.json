@@ -1,0 +1,50 @@
+{
+  "name": "solgit-vscode",
+  "displayName": "SolGit",
+  "description": "Decentralized Git on Solana",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "solgit.init",
+        "title": "SolGit: Initialize Repo"
+      },
+      {
+        "command": "solgit.commit",
+        "title": "SolGit: Commit Changes"
+      },
+      {
+         "command": "solgit.push",
+         "title": "SolGit: Push to Chain"
+      },
+      {
+         "command": "solgit.graph",
+         "title": "SolGit: History Graph"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.96.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "iqlabs-sdk": "file:../../idsdk/IQLabsBackendSdk",
+    "@solana/web3.js": "^1.98.0",
+    "dotenv": "^16.0.0",
+    "ignore": "^7.0.0"
+  }
+}
