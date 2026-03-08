@@ -1,7 +1,6 @@
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { Idl } from "@coral-xyz/anchor";
-// @ts-ignore
-import iqlabs from "iqlabs-sdk/src";
+import iqlabs from "iqlabs-sdk";
 import codeInIdl from "iqlabs-sdk/idl/code_in.json";
 import { Repository, Commit, FileTree, Collaborator, GIT_CONSTANTS, Ref, PullRequest, UserProfile, Comment, FundingPool, Issue } from "./types";
 
@@ -53,7 +52,7 @@ export class GitChainService {
         this.connection = connection;
         this.wallet = wallet;
         this.rootIdStr = rootId;
-        this.programId = iqlabs.contract.getProgramId();
+        this.programId = new PublicKey(iqlabs.contract.DEFAULT_ANCHOR_PROGRAM_ID);
         this.builder = iqlabs.contract.createInstructionBuilder(
             IDL,
             this.programId
@@ -64,7 +63,7 @@ export class GitChainService {
         if (this._dbRootId) return this._dbRootId;
         const encoder = new TextEncoder();
         const data = encoder.encode(this.rootIdStr);
-        const hash = await crypto.subtle.digest("SHA-256", data);
+        const hash = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
         this._dbRootId = Buffer.from(hash);
         return this._dbRootId;
     }
@@ -72,7 +71,7 @@ export class GitChainService {
     private async sha256(input: string): Promise<Buffer> {
         const encoder = new TextEncoder();
         const data = encoder.encode(input);
-        const hash = await crypto.subtle.digest("SHA-256", data);
+        const hash = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
         return Buffer.from(hash);
     }
 
@@ -732,11 +731,9 @@ export class GitChainService {
                      const txId: string = await iqlabs.writer.codeIn(
                          { connection: this.connection, signer: this.signer as any },
                          chunks,
-                         undefined, // default mode
-                         f.path.split('/').pop() || "file", // filename
-                         0, // method
+                         f.path.split('/').pop() || "file",
+                         0,
                          "application/octet-stream",
-                         // @ts-ignore
                          (p: number) => {}
                      );
 
@@ -767,7 +764,6 @@ export class GitChainService {
          const treeTxId = await iqlabs.writer.codeIn(
              { connection: this.connection, signer: this.signer as any },
              treeChunks,
-             undefined,
              "tree.json",
              0,
              "application/json"
